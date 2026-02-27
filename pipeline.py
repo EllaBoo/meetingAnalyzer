@@ -1136,7 +1136,11 @@ def generate_html(analysis, transcript_text="", lang_code="ru"):
         kps = "".join(f'<li>{e(k)}</li>' for k in t.get("key_points", []))
         pos = ""
         for s, v in t.get("positions", {}).items():
-            pos += f'<div class="pos"><span class="pos-name">{e(s)}</span><p>{e(v)}</p></div>'
+            if isinstance(v, dict):
+                stance = v.get('stance', '')
+                pos += f'<div class="pos"><span class="pos-name">{e(s)}</span><p>{e(stance)}</p></div>'
+            else:
+                pos += f'<div class="pos"><span class="pos-name">{e(s)}</span><p>{e(v)}</p></div>'
         quotes = "".join(f'<blockquote>«{e(q)}»</blockquote>' for q in t.get("quotes", []))
         unr = "".join(f'<li class="unr">❓ {e(u)}</li>' for u in t.get("unresolved", []))
         detail = e(t.get("detailed_discussion", ""))
