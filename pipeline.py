@@ -264,7 +264,7 @@ def make_slug(analysis):
     return re.sub(r"[^\w\s-]", "", raw).strip().replace(" ", "_")[:50]
 
 
-def generate_pdf(analysis):
+def generate_pdf(analysis, lang_code="ru"):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import cm, mm
@@ -277,13 +277,31 @@ def generate_pdf(analysis):
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
 
+    # Default: DejaVu (supports Latin, Cyrillic, Kazakh)
+    fn, fb, fi = "Helvetica", "Helvetica-Bold", "Helvetica-Oblique"
     try:
         pdfmetrics.registerFont(TTFont("DV", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
         pdfmetrics.registerFont(TTFont("DVB", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"))
         pdfmetrics.registerFont(TTFont("DVI", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf"))
         fn, fb, fi = "DV", "DVB", "DVI"
     except Exception:
-        fn, fb, fi = "Helvetica", "Helvetica-Bold", "Helvetica-Oblique"
+        pass
+
+    # Chinese: try Noto CJK (only if zh selected)
+    if lang_code == "zh":
+        noto_paths = [
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        ]
+        for np in noto_paths:
+            if os.path.exists(np):
+                try:
+                    pdfmetrics.registerFont(TTFont("NotoZH", np, subfontIndex=0))
+                    fn, fb, fi = "NotoZH", "NotoZH", "NotoZH"
+                    break
+                except Exception:
+                    pass
 
     # Colors
     DARK = HexColor("#1a1a2e")

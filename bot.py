@@ -170,7 +170,7 @@ async def process_meeting(client, chat_id, lang_code):
         analysis = await asyncio.to_thread(analyze_meeting, merged, lang_code, OPENAI_API_KEY)
 
         await client.send_message(chat_id, "📝 Генерирую отчёты...")
-        pdf_path, pdf_fn = await asyncio.to_thread(generate_pdf, analysis)
+        pdf_path, pdf_fn = await asyncio.to_thread(generate_pdf, analysis, lang_code)
         html_path, html_fn = await asyncio.to_thread(generate_html, analysis, merged["speaker_transcript"])
         txt_path, txt_fn = await asyncio.to_thread(generate_txt, analysis, merged["speaker_transcript"])
 
@@ -286,7 +286,7 @@ async def handle_retranslate(client, callback: CallbackQuery):
         await client.send_message(chat_id, "🧠 Переанализирую на новом языке...")
         analysis = await asyncio.to_thread(analyze_meeting, transcript_data, lang_code, OPENAI_API_KEY)
 
-        pdf_path, pdf_fn = await asyncio.to_thread(generate_pdf, analysis)
+        pdf_path, pdf_fn = await asyncio.to_thread(generate_pdf, analysis, lang_code)
         html_path, html_fn = await asyncio.to_thread(generate_html, analysis, s["last_transcript"])
 
         await client.send_document(chat_id, pdf_path, file_name=pdf_fn, caption=f"📄 PDF ({lang_name})")
