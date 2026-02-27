@@ -165,7 +165,7 @@ async def process_meeting(client, chat_id, lang_code):
 
         await client.send_message(chat_id, "📝 Генерирую отчёты...")
         pdf_path, pdf_fn = await asyncio.to_thread(generate_pdf, analysis)
-        html_path, html_fn = await asyncio.to_thread(generate_html, analysis)
+        html_path, html_fn = await asyncio.to_thread(generate_html, analysis, merged["speaker_transcript"])
         txt_path, txt_fn = await asyncio.to_thread(generate_txt, analysis, merged["speaker_transcript"])
 
         await client.send_message(

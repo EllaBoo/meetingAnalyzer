@@ -197,24 +197,32 @@ SYSTEM_PROMPT = """Ты – Цифровой Умник, AI-аналитик в�
 - При этом ты ЭКСПЕРТ. Когда дело доходит до рекомендаций – ты абсолютно серьёзен, конкретен и профессионален.
 
 СТИЛЬ ТЕКСТА:
-- В "description" тем и "summary" – можно добавить лёгкую иронию и тёплые наблюдения
+- В "description" тем – ПОДРОБНО раскрывай суть обсуждения: контекст, почему тема возникла, как развивалась дискуссия. Можно с иронией.
+- В "detailed_discussion" – передай ход обсуждения: кто что предлагал, какие аргументы приводил, к чему пришли. Это самая подробная часть.
 - В "key_points" – чётко и по делу, но живым языком
-- В "emotional_map" и "unspoken" – здесь твой сарказм уместен ("похоже, Собеседник 2 мысленно уже был на обеде")
-- В "expert_recommendations" – СТРОГО профессионально. Каждая рекомендация должна быть конкретной, полезной и реализуемой. Никаких шуток в разделе рекомендаций. Ты здесь эксперт с многолетним опытом в обсуждаемой области.
-- В "strengths" – можно тепло похвалить, как хороший ментор
+- В "emotional_map" и "unspoken" – здесь твой сарказм уместен
+- В "expert_recommendations" – СТРОГО профессионально. Ты здесь эксперт с многолетним опытом в обсуждаемой области. Каждая рекомендация конкретна, полезна, реализуема.
 
 ПРИНЦИПЫ:
-1. Только факты из аудио. Не выдумывай. Если информации не было – не додумывай.
+1. ТОЛЬКО факты из аудио. Не выдумывай. Если информации не было – НЕ ДОДУМЫВАЙ.
 2. Интерпретации маркируй «возможно», «судя по контексту», «создаётся впечатление».
-3. Рекомендации = отдельная глава. Каждая рекомендация содержит ЧТО делать, ПОЧЕМУ и КАК.
+3. Рекомендации = отдельная глава. Каждая содержит ЧТО, ПОЧЕМУ, КАК.
 4. Адаптируйся к области обсуждения – стань экспертом именно в этой теме.
 5. Используй яркие цитаты из беседы.
 6. «Собеседник 1, 2, 3...» если имена не прозвучали. Если имена звучали – используй их.
 7. Оценивай идеи, не людей.
-8. Рекомендации должны быть ДЕЙСТВЕННЫМИ – не "подумайте об этом", а "сделайте X потому что Y, вот как: Z".
+8. Рекомендации должны быть ДЕЙСТВЕННЫМИ.
+9. ИСПРАВЛЯЙ ОШИБКИ РАСПОЗНАВАНИЯ: если термин распознан некорректно (например «диджитал маркертинг» вместо «digital marketing»), используй правильный вариант. В поле "corrected_terms" укажи что было распознано и что имелось в виду.
+10. Если ты НЕ УВЕРЕН в интерпретации слова, фразы или контекста – добавь в "uncertainties". Лучше признать неуверенность, чем выдумать.
+11. Создай "glossary" – словарь ключевых терминов/понятий из обсуждаемой области для неподготовленного читателя.
+
+РАЗДЕЛЕНИЕ РЕШЕНИЙ И ЗАДАЧ:
+- "decisions" – это ТОЛЬКО то, о чём ДОГОВОРИЛИСЬ участники. Конкретные решения, принятые на встрече.
+- "action_items" – конкретные задачи: кто, что, когда.
+- НЕ путай предложения с решениями. Если кто-то ПРЕДЛОЖИЛ, но не приняли – это НЕ решение.
 
 Ответ СТРОГО в JSON:
-{"meeting_topic_short":"3-5 слов","passport":{"date":"...","duration_estimate":"...","participants_count":0,"participants":["Собеседник 1"],"format":"...","domain":"...","tone":"...","summary":"..."},"topics":[{"title":"...","description":"...","raised_by":"...","key_points":["..."],"positions":{"Собеседник 1":"..."},"outcome":"...","unresolved":["..."],"quotes":["..."]}],"decisions":[{"decision":"...","responsible":"...","deadline":"...","status":"accepted|pending|question"}],"unresolved_questions":[{"question":"...","reason":"...","assigned_to":"..."}],"dynamics":{"participation_balance":{"Собеседник 1":"45%"},"interaction_patterns":{"interruptions":"...","question_askers":["..."],"topic_initiators":["..."],"challengers":["..."]},"emotional_map":{"enthusiasm_moments":["..."],"tension_moments":["..."],"uncertainty_moments":["..."],"turning_points":["..."]},"unspoken":["..."]},"expert_recommendations":{"strengths":["..."],"attention_points":["..."],"recommendations":[{"what":"...","why":"...","how":"...","priority":"high|medium|low"}],"next_meeting_questions":["..."]}}"""
+{"meeting_topic_short":"3-5 слов","passport":{"date":"...","duration_estimate":"...","participants_count":0,"participants":["Собеседник 1"],"format":"...","domain":"...","tone":"...","summary":"..."},"topics":[{"title":"...","description":"подробное описание, 3-5 предложений","detailed_discussion":"подробный ход обсуждения: кто что говорил, какие аргументы, как развивалась дискуссия, 5-10 предложений","raised_by":"...","key_points":["..."],"positions":{"Собеседник 1":"подробная позиция с аргументами"},"outcome":"...","unresolved":["..."],"quotes":["..."]}],"decisions":[{"decision":"только то что реально решили","responsible":"...","status":"accepted|pending"}],"action_items":[{"task":"...","responsible":"...","deadline":"..."}],"unresolved_questions":[{"question":"...","reason":"..."}],"dynamics":{"participation_balance":{"Собеседник 1":"45%"},"interaction_patterns":{"interruptions":"...","question_askers":["..."],"topic_initiators":["..."],"challengers":["..."]},"emotional_map":{"enthusiasm_moments":["..."],"tension_moments":["..."],"uncertainty_moments":["..."],"turning_points":["..."]},"unspoken":["..."]},"expert_recommendations":{"strengths":["..."],"attention_points":["..."],"recommendations":[{"what":"...","why":"...","how":"...","priority":"high|medium|low"}],"next_meeting_questions":["..."]},"uncertainties":[{"text":"фраза или термин","context":"где прозвучало","possible_meaning":"возможная интерпретация"}],"corrected_terms":[{"original":"как распознано","corrected":"что имелось в виду","context":"в каком контексте"}],"glossary":[{"term":"...","definition":"пояснение для неподготовленного читателя"}]}"""
 
 
 def analyze_meeting(transcript_data, language_code, openai_key):
@@ -276,6 +284,21 @@ def generate_pdf(analysis):
         fn, fb, fi = "DV", "DVB", "DVI"
     except Exception:
         fn, fb, fi = "Helvetica", "Helvetica-Bold", "Helvetica-Oblique"
+
+    # Try CJK font for Chinese support
+    try:
+        noto_paths = [
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        ]
+        for np in noto_paths:
+            if os.path.exists(np):
+                pdfmetrics.registerFont(TTFont("Noto", np, subfontIndex=0))
+                fn, fb, fi = "Noto", "Noto", "Noto"
+                break
+    except Exception:
+        pass
 
     # Colors
     DARK = HexColor("#1a1a2e")
@@ -490,6 +513,53 @@ def generate_pdf(analysis):
                 st.append(Paragraph(f"→ {e(q)}", bullet))
 
     # === FOOTER ===
+    # === ACTION ITEMS ===
+    ais = analysis.get("action_items", [])
+    if ais:
+        st.append(section_header(5, "ЗАДАЧИ"))
+        ai_rows = [["Задача", "Ответственный", "Срок"]]
+        for a in ais:
+            ai_rows.append([e(a.get("task", "")), e(a.get("responsible", "—")), e(a.get("deadline", "—"))])
+        ait = Table(ai_rows, colWidths=[W*0.55, W*0.25, W*0.20])
+        ait.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, 0), fb), ("FONTNAME", (0, 1), (-1, -1), fn),
+            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("BACKGROUND", (0, 0), (-1, 0), BLUE), ("TEXTCOLOR", (0, 0), (-1, 0), HexColor("#ffffff")),
+            ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+            ("TOPPADDING", (0, 0), (-1, -1), 1.5*mm), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5*mm),
+            ("LEFTPADDING", (0, 0), (-1, -1), 1.5*mm), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        st.append(ait)
+        st.append(Spacer(1, 2*mm))
+
+    # === UNCERTAINTIES ===
+    unc = analysis.get("uncertainties", [])
+    if unc:
+        st.append(section_header(6, "ТРЕБУЕТ УТОЧНЕНИЯ"))
+        for u in unc:
+            st.append(Paragraph(f"⚠️ <b>«{e(u.get('text', ''))}»</b>", body_bold))
+            if u.get("context"):
+                st.append(Paragraph(f"Контекст: {e(u['context'])}", bullet))
+            if u.get("possible_meaning"):
+                st.append(Paragraph(f"Возможно: {e(u['possible_meaning'])}", bullet))
+        st.append(Spacer(1, 2*mm))
+
+    # === CORRECTED TERMS ===
+    ct = analysis.get("corrected_terms", [])
+    if ct:
+        st.append(section_header(7, "ИСПРАВЛЕНИЯ РАСПОЗНАВАНИЯ"))
+        for c in ct:
+            st.append(Paragraph(f"«{e(c.get('original', ''))}» → <b>{e(c.get('corrected', ''))}</b>", body))
+        st.append(Spacer(1, 2*mm))
+
+    # === GLOSSARY ===
+    gl = analysis.get("glossary", [])
+    if gl:
+        st.append(section_header(8, "ГЛОССАРИЙ"))
+        for g in gl:
+            st.append(Paragraph(f"<b>{e(g.get('term', ''))}</b> — {e(g.get('definition', ''))}", body))
+        st.append(Spacer(1, 2*mm))
+
     st.append(Spacer(1, 5*mm))
     st.append(hr())
     st.append(Paragraph(f"Цифровой Умник • {ds} • AI-анализ встречи", footer_s))
@@ -499,7 +569,7 @@ def generate_pdf(analysis):
     return fpath, fname
 
 
-def generate_html(analysis):
+def generate_html(analysis, transcript_text=""):
     slug = make_slug(analysis)
     ds = datetime.now().strftime("%Y-%m-%d")
     fname = f"{slug}_{ds}_interactive.html"
@@ -507,53 +577,182 @@ def generate_html(analysis):
     p = analysis.get("passport", {})
     topics = analysis.get("topics", [])
     decs = analysis.get("decisions", [])
+    ais = analysis.get("action_items", [])
     dy = analysis.get("dynamics", {})
     rc = analysis.get("expert_recommendations", {})
+    unc = analysis.get("uncertainties", [])
+    ct = analysis.get("corrected_terms", [])
+    gl = analysis.get("glossary", [])
     e = esc
 
+    # Topics HTML - detailed
     th = ""
     for i, t in enumerate(topics, 1):
-        kps = "".join(f'<div class="kp">– {e(k)}</div>' for k in t.get("key_points", []))
-        pos = "".join(f'<div><b>{e(s)}:</b> {e(v)}</div>' for s, v in t.get("positions", {}).items())
-        quotes = "".join(f'<blockquote>«{e(q)}»</blockquote>' for q in t.get("quotes", [])[:3])
-        th += f'<div class="tc"><div class="th" onclick="tog(this)"><span class="tn">{i}</span><span class="tt">{e(t.get("title",""))}</span><span class="ar">▼</span></div><div class="tb" style="display:none"><p>{e(t.get("description",""))}</p><p><b>Поднял(а):</b> {e(t.get("raised_by",""))}</p><p><b>Итог:</b> {e(t.get("outcome",""))}</p>{kps}{pos}{quotes}</div></div>'
+        kps = "".join(f'<li>{e(k)}</li>' for k in t.get("key_points", []))
+        pos = ""
+        for s, v in t.get("positions", {}).items():
+            pos += f'<div class="pos"><span class="pos-name">{e(s)}</span><p>{e(v)}</p></div>'
+        quotes = "".join(f'<blockquote>«{e(q)}»</blockquote>' for q in t.get("quotes", []))
+        unr = "".join(f'<li class="unr">❓ {e(u)}</li>' for u in t.get("unresolved", []))
+        detail = e(t.get("detailed_discussion", ""))
+        th += f'''<div class="tc">
+<div class="th" onclick="tog(this)"><span class="tn">{i}</span><span class="tt">{e(t.get("title",""))}</span><span class="ar">▼</span></div>
+<div class="tb" style="display:none">
+<div class="desc">{e(t.get("description",""))}</div>
+{f'<div class="detail-block"><div class="detail-label">💬 Ход обсуждения</div><p>{detail}</p></div>' if detail else ""}
+{f'<div class="detail-block"><div class="detail-label">📌 Ключевые тезисы</div><ul>{kps}</ul></div>' if kps else ""}
+{f'<div class="detail-block"><div class="detail-label">👥 Позиции участников</div>{pos}</div>' if pos else ""}
+{f'<div class="detail-block"><div class="detail-label">🎯 Итог</div><p>{e(t.get("outcome",""))}</p></div>' if t.get("outcome") else ""}
+{f'<div class="detail-block"><div class="detail-label">💬 Цитаты</div>{quotes}</div>' if quotes else ""}
+{f'<div class="detail-block"><div class="detail-label">❓ Нерешённые вопросы</div><ul>{unr}</ul></div>' if unr else ""}
+<p class="raised"><small>Тему поднял(а): {e(t.get("raised_by",""))}</small></p>
+</div></div>'''
 
+    # Decisions + Action Items
     dh = ""
-    for d in decs:
-        ic = {"accepted": "✅", "pending": "⏳", "question": "❓"}.get(d.get("status", ""), "•")
-        dh += f'<div class="di">{ic} <b>{e(d.get("decision",""))}</b><br><small>{e(d.get("responsible",""))} {e(d.get("deadline",""))}</small></div>'
+    if decs:
+        dh += '<h3>✅ Принятые решения</h3>'
+        for d in decs:
+            ic = {"accepted": "✅", "pending": "⏳"}.get(d.get("status", ""), "•")
+            dh += f'<div class="di">{ic} <b>{e(d.get("decision",""))}</b><br><small>Ответственный: {e(d.get("responsible","—"))}</small></div>'
+    if ais:
+        dh += '<h3>📋 Задачи</h3>'
+        for a in ais:
+            dh += f'<div class="di">📌 <b>{e(a.get("task",""))}</b><br><small>{e(a.get("responsible","—"))} • {e(a.get("deadline","—"))}</small></div>'
+    if not decs and not ais:
+        dh = "<p>Конкретных решений и задач не зафиксировано.</p>"
 
+    # Dynamics
     bh = ""
-    for s, pc in dy.get("participation_balance", {}).items():
+    for s2, pc in dy.get("participation_balance", {}).items():
         n = int(re.sub(r"[^0-9]", "", str(pc)) or 0)
-        bh += f'<div class="bb"><span class="bl">{e(s)}</span><div class="bc"><div class="bf" style="width:{n}%"></div></div><span>{e(pc)}</span></div>'
+        bh += f'<div class="bb"><span class="bl">{e(s2)}</span><div class="bc"><div class="bf" style="width:{n}%"></div></div><span>{e(pc)}</span></div>'
 
+    emh = ""
+    em = dy.get("emotional_map", {})
+    for key, label, icon in [("enthusiasm_moments", "Энтузиазм", "🔥"), ("tension_moments", "Напряжение", "⚡"), ("turning_points", "Переломы", "🔄"), ("uncertainty_moments", "Неуверенность", "🤔")]:
+        items = em.get(key, [])
+        if items:
+            emh += f'<div class="em-block"><h4>{icon} {label}</h4>'
+            for it in items:
+                emh += f'<div class="em-item">• {e(it)}</div>'
+            emh += '</div>'
+
+    unspoken = dy.get("unspoken", [])
+    if unspoken:
+        emh += '<div class="em-block"><h4>🤫 Между строк</h4>'
+        for u in unspoken:
+            emh += f'<div class="em-item">• {e(u)}</div>'
+        emh += '</div>'
+
+    iph = ""
+    ip = dy.get("interaction_patterns", {})
+    if ip.get("interruptions"):
+        iph += f'<p><b>Перебивания:</b> {e(ip["interruptions"])}</p>'
+    if ip.get("topic_initiators"):
+        iph += f'<p><b>Инициаторы тем:</b> {", ".join(e(x) for x in ip["topic_initiators"])}</p>'
+
+    # Recommendations
     rh = ""
+    for s2 in rc.get("strengths", []):
+        rh += f'<div class="rc rc-ok">✅ {e(s2)}</div>'
+    for ap in rc.get("attention_points", []):
+        rh += f'<div class="rc rc-warn">⚠️ {e(ap)}</div>'
     for r in rc.get("recommendations", []):
         ic = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(r.get("priority", ""), "•")
-        rh += f'<div class="rc">{ic} <b>{e(r.get("what",""))}</b><br><small>{e(r.get("why",""))}</small></div>'
+        rh += f'''<div class="rc rc-rec">{ic} <b>{e(r.get("what",""))}</b>
+{f'<p class="rc-why"><b>Почему:</b> {e(r["why"])}</p>' if r.get("why") else ""}
+{f'<p class="rc-how"><b>Как:</b> {e(r["how"])}</p>' if r.get("how") else ""}</div>'''
+    nmq = rc.get("next_meeting_questions", [])
+    if nmq:
+        rh += '<h3>❓ Вопросы для следующей встречи</h3>'
+        for q in nmq:
+            rh += f'<div class="rc">→ {e(q)}</div>'
+
+    # Uncertainties
+    unch = ""
+    if unc:
+        for u in unc:
+            unch += f'''<div class="unc-item"><div class="unc-text">⚠️ «{e(u.get("text",""))}»</div>
+<div class="unc-ctx">Контекст: {e(u.get("context",""))}</div>
+<div class="unc-mean">Возможно: {e(u.get("possible_meaning",""))}</div></div>'''
+
+    # Corrected terms
+    cth = ""
+    if ct:
+        for c in ct:
+            cth += f'<div class="ct-item"><span class="ct-old">{e(c.get("original",""))}</span> → <span class="ct-new">{e(c.get("corrected",""))}</span></div>'
+
+    # Glossary
+    glh = ""
+    if gl:
+        for g in gl:
+            glh += f'<div class="gl-item"><div class="gl-term">{e(g.get("term",""))}</div><div class="gl-def">{e(g.get("definition",""))}</div></div>'
+
+    # Transcript
+    trh = e(transcript_text).replace("\n", "<br>") if transcript_text else "<p>Транскрипция недоступна</p>"
+
+    # Count tabs
+    tab_count = 7  # обзор, темы, решения, динамика, рекомендации, глоссарий, транскрипт
+    if unc or ct:
+        tab_count += 1
 
     html = f'''<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Цифровой Умник</title><style>
-*{{margin:0;padding:0;box-sizing:border-box}}body{{font-family:system-ui,sans-serif;background:#f5f5f7;color:#1d1d1f;line-height:1.6;padding:16px}}
-.w{{max-width:860px;margin:0 auto}}.hd{{background:linear-gradient(135deg,#1a1a2e,#0f3460);color:#fff;padding:30px;border-radius:14px;margin-bottom:20px}}.hd h1{{font-size:24px}}.hd p{{opacity:.85;margin-top:6px}}
-.s{{background:#fff;border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.06)}}.s h2{{font-size:18px;margin-bottom:12px;color:#16213e}}
-.nt{{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}}.nb{{padding:6px 14px;border-radius:16px;background:#e8e8ed;cursor:pointer;font-size:13px;font-weight:500;border:none}}.nb:hover{{background:#d0d0d8}}.nb.a{{background:#e94560;color:#fff}}
+<title>Цифровой Умник – {e(analysis.get("meeting_topic_short","Отчёт"))}</title><style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f5f7;color:#1d1d1f;line-height:1.65;padding:16px}}
+.w{{max-width:900px;margin:0 auto}}
+.hd{{background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);color:#fff;padding:32px;border-radius:16px;margin-bottom:20px}}
+.hd h1{{font-size:26px;margin-bottom:6px}}.hd p{{opacity:.85;font-size:15px;line-height:1.5}}
+.s{{background:#fff;border-radius:12px;padding:24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.06)}}
+.s h2{{font-size:20px;margin-bottom:16px;color:#16213e}}.s h3{{font-size:16px;margin:16px 0 10px;color:#333}}
+.nt{{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;position:sticky;top:0;background:#f5f5f7;padding:8px 0;z-index:10}}
+.nb{{padding:8px 16px;border-radius:20px;background:#fff;cursor:pointer;font-size:13px;font-weight:500;border:1px solid #e0e0e0;transition:all .2s}}
+.nb:hover{{background:#f0f0f5;border-color:#ccc}}.nb.a{{background:#e94560;color:#fff;border-color:#e94560}}
 .pn{{display:none}}.pn.a{{display:block}}
-.pg{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}}.pi .lb{{font-size:11px;color:#e94560;font-weight:600;text-transform:uppercase}}.pi .vl{{font-size:14px;margin-top:2px}}
-.sb{{background:#f0f4ff;border-left:3px solid #e94560;padding:12px;border-radius:0 6px 6px 0;margin-top:12px}}
-.tc{{border:1px solid #e8e8ed;border-radius:8px;margin-bottom:8px;overflow:hidden}}.th{{display:flex;align-items:center;padding:12px 16px;cursor:pointer;background:#fafafa;gap:10px}}.th:hover{{background:#f0f0f5}}
-.tn{{background:#e94560;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0}}.tt{{flex:1;font-weight:600;font-size:14px}}.ar{{color:#999}}
-.tb{{padding:16px;border-top:1px solid #e8e8ed}}.tb p{{margin-bottom:8px;font-size:13px}}.kp{{font-size:13px;padding:2px 0;color:#555}}
-blockquote{{border-left:3px solid #e94560;padding:6px 14px;margin:6px 0;color:#666;font-style:italic;background:#fafafa;border-radius:0 6px 6px 0;font-size:13px}}
-.di{{padding:10px;border-radius:6px;margin-bottom:6px;background:#f8f8fa;font-size:14px}}.di small{{color:#888}}
-.bb{{display:flex;align-items:center;margin-bottom:8px}}.bl{{width:120px;font-size:13px}}.bc{{flex:1;height:20px;background:#e8e8ed;border-radius:10px;overflow:hidden;margin:0 10px}}.bf{{height:100%;background:linear-gradient(90deg,#e94560,#0f3460);border-radius:10px}}
-.rc{{padding:12px;border-radius:8px;margin-bottom:8px;background:#fafafa;border:1px solid #e8e8ed;font-size:14px}}
-.ft{{text-align:center;padding:16px;color:#999;font-size:12px}}
+.pg{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}}
+.pi .lb{{font-size:11px;color:#e94560;font-weight:600;text-transform:uppercase;letter-spacing:.5px}}.pi .vl{{font-size:15px;margin-top:3px;font-weight:500}}
+.sb{{background:linear-gradient(135deg,#f0f4ff,#fef0f3);border-left:4px solid #e94560;padding:14px 16px;border-radius:0 8px 8px 0;margin-top:14px;font-size:14px;line-height:1.6}}
+.tc{{border:1px solid #e8e8ed;border-radius:10px;margin-bottom:10px;overflow:hidden}}
+.th{{display:flex;align-items:center;padding:14px 18px;cursor:pointer;background:#fafafa;gap:12px;transition:background .2s}}.th:hover{{background:#f0f0f5}}
+.tn{{background:#e94560;color:#fff;min-width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0}}
+.tt{{flex:1;font-weight:600;font-size:15px}}.ar{{color:#999;transition:transform .2s}}.th.open .ar{{transform:rotate(180deg)}}
+.tb{{padding:20px;border-top:1px solid #e8e8ed}}
+.desc{{font-size:14px;color:#333;margin-bottom:14px;line-height:1.7}}
+.detail-block{{margin-bottom:14px;padding:12px 14px;background:#f9f9fb;border-radius:8px}}
+.detail-label{{font-weight:600;font-size:13px;color:#16213e;margin-bottom:6px}}
+.detail-block p{{font-size:13px;line-height:1.7;color:#444}}.detail-block ul{{padding-left:18px;font-size:13px}}.detail-block li{{margin-bottom:4px}}
+.pos{{background:#fff;border:1px solid #eee;border-radius:6px;padding:10px 12px;margin-bottom:6px}}.pos-name{{font-weight:600;color:#e94560;font-size:12px;text-transform:uppercase;letter-spacing:.3px}}
+.pos p{{font-size:13px;margin-top:4px}}
+.raised{{margin-top:10px;color:#999}}
+blockquote{{border-left:3px solid #e94560;padding:8px 16px;margin:8px 0;color:#555;font-style:italic;background:#fafafa;border-radius:0 6px 6px 0;font-size:13px}}
+.di{{padding:12px 14px;border-radius:8px;margin-bottom:8px;background:#f8f8fa;border:1px solid #eee;font-size:14px}}.di small{{color:#888;display:block;margin-top:4px}}
+.bb{{display:flex;align-items:center;margin-bottom:10px}}.bl{{width:130px;font-size:13px;font-weight:500}}.bc{{flex:1;height:22px;background:#e8e8ed;border-radius:11px;overflow:hidden;margin:0 12px}}.bf{{height:100%;background:linear-gradient(90deg,#e94560,#0f3460);border-radius:11px;transition:width .5s}}
+.em-block{{margin-bottom:12px}}.em-block h4{{font-size:14px;margin-bottom:6px}}.em-item{{font-size:13px;padding:3px 0;color:#555}}
+.rc{{padding:14px;border-radius:8px;margin-bottom:8px;border:1px solid #eee;font-size:14px;line-height:1.6}}
+.rc-ok{{background:#f0fdf4;border-color:#bbf7d0}}.rc-warn{{background:#fffbeb;border-color:#fde68a}}.rc-rec{{background:#f8f8fa}}
+.rc-why,.rc-how{{font-size:13px;color:#555;margin-top:6px}}
+.unc-item{{padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;margin-bottom:8px}}
+.unc-text{{font-weight:600;font-size:14px}}.unc-ctx,.unc-mean{{font-size:13px;color:#666;margin-top:4px}}
+.ct-item{{display:flex;gap:8px;align-items:center;padding:6px 0;font-size:14px}}.ct-old{{text-decoration:line-through;color:#999}}.ct-new{{font-weight:600;color:#16213e}}
+.gl-item{{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #f0f0f0}}.gl-term{{font-weight:600;min-width:140px;color:#16213e;font-size:14px}}.gl-def{{font-size:13px;color:#555;line-height:1.5}}
+.tr-box{{background:#fafafa;border-radius:8px;padding:20px;font-family:monospace;font-size:12px;line-height:1.8;max-height:70vh;overflow-y:auto;white-space:pre-wrap;word-break:break-word}}
+.ft{{text-align:center;padding:20px;color:#999;font-size:12px}}
+li.unr{{color:#d97706;font-weight:500}}
+@media(max-width:600px){{.pg{{grid-template-columns:1fr}}.nb{{font-size:12px;padding:6px 10px}}.bl{{width:90px}}}}
 </style></head><body><div class="w">
 <div class="hd"><h1>🧠 Цифровой Умник</h1><p>{e(p.get("summary",""))}</p></div>
-<div class="nt"><button class="nb a" onclick="go('ov')">📋 Обзор</button><button class="nb" onclick="go('tp')">🎯 Темы ({len(topics)})</button><button class="nb" onclick="go('dc')">✅ Решения</button><button class="nb" onclick="go('dy')">📊 Динамика</button><button class="nb" onclick="go('rc')">💡 Рекомендации</button></div>
-<div id="p-ov" class="pn a"><div class="s"><div class="pg">
+<div class="nt">
+<button class="nb a" onclick="go('ov')">📋 Обзор</button>
+<button class="nb" onclick="go('tp')">🎯 Темы ({len(topics)})</button>
+<button class="nb" onclick="go('dc')">📌 Решения и задачи</button>
+<button class="nb" onclick="go('dy')">📊 Динамика</button>
+<button class="nb" onclick="go('rc')">💡 Рекомендации</button>
+{f'<button class="nb" onclick="go(\'un\')">⚠️ Уточнения</button>' if unc or ct else ""}
+{f'<button class="nb" onclick="go(\'gl\')">📖 Глоссарий</button>' if gl else ""}
+<button class="nb" onclick="go('tr')">📝 Транскрипт</button>
+</div>
+<div id="p-ov" class="pn a"><div class="s"><h2>📋 Обзор встречи</h2><div class="pg">
 <div class="pi"><div class="lb">Дата</div><div class="vl">{e(p.get("date",""))}</div></div>
 <div class="pi"><div class="lb">Длительность</div><div class="vl">{e(p.get("duration_estimate",""))}</div></div>
 <div class="pi"><div class="lb">Участники</div><div class="vl">{e(str(p.get("participants_count","")))}</div></div>
@@ -561,13 +760,18 @@ blockquote{{border-left:3px solid #e94560;padding:6px 14px;margin:6px 0;color:#6
 <div class="pi"><div class="lb">Область</div><div class="vl">{e(p.get("domain",""))}</div></div>
 <div class="pi"><div class="lb">Тон</div><div class="vl">{e(p.get("tone",""))}</div></div>
 </div><div class="sb">{e(p.get("summary",""))}</div></div></div>
-<div id="p-tp" class="pn"><div class="s"><h2>🎯 Темы</h2>{th}</div></div>
-<div id="p-dc" class="pn"><div class="s"><h2>✅ Решения</h2>{dh or "<p>Решения не зафиксированы</p>"}</div></div>
-<div id="p-dy" class="pn"><div class="s"><h2>📊 Динамика</h2>{f"<h3>Баланс участия</h3>{bh}" if bh else ""}</div></div>
-<div id="p-rc" class="pn"><div class="s"><h2>💡 Рекомендации</h2>{"".join(f"<div>✅ {e(s)}</div>" for s in rc.get("strengths",[]))}{rh}</div></div>
-<div class="ft">Цифровой Умник • {ds}</div></div>
-<script>function go(id){{document.querySelectorAll('.pn').forEach(x=>x.classList.remove('a'));document.querySelectorAll('.nb').forEach(x=>x.classList.remove('a'));document.getElementById('p-'+id).classList.add('a');event.target.classList.add('a')}}
-function tog(el){{var b=el.nextElementSibling;b.style.display=b.style.display==='none'?'block':'none'}}</script></body></html>'''
+<div id="p-tp" class="pn"><div class="s"><h2>🎯 Темы обсуждения</h2>{th}</div></div>
+<div id="p-dc" class="pn"><div class="s"><h2>📌 Решения и задачи</h2>{dh}</div></div>
+<div id="p-dy" class="pn"><div class="s"><h2>📊 Динамика встречи</h2>{f"<h3>Баланс участия</h3>{bh}" if bh else ""}{f"<h3>Взаимодействие</h3>{iph}" if iph else ""}{f"<h3>Эмоциональная карта</h3>{emh}" if emh else ""}</div></div>
+<div id="p-rc" class="pn"><div class="s"><h2>💡 Рекомендации Цифрового Умника</h2>{rh}</div></div>
+{f'<div id="p-un" class="pn"><div class="s"><h2>⚠️ Требует уточнения</h2>{f"<h3>Неоднозначные моменты</h3>{unch}" if unch else ""}{f"<h3>Исправления распознавания</h3>{cth}" if cth else ""}</div></div>' if unc or ct else ""}
+{f'<div id="p-gl" class="pn"><div class="s"><h2>📖 Глоссарий</h2><p style="color:#888;margin-bottom:14px;font-size:13px">Ключевые термины из области обсуждения</p>{glh}</div></div>' if gl else ""}
+<div id="p-tr" class="pn"><div class="s"><h2>📝 Транскрипция</h2><div class="tr-box">{trh}</div></div></div>
+<div class="ft">Цифровой Умник • {ds} • AI-анализ встречи</div></div>
+<script>
+function go(id){{document.querySelectorAll('.pn').forEach(x=>x.classList.remove('a'));document.querySelectorAll('.nb').forEach(x=>x.classList.remove('a'));document.getElementById('p-'+id).classList.add('a');event.target.classList.add('a')}}
+function tog(el){{var b=el.nextElementSibling;var isOpen=b.style.display!=='none';b.style.display=isOpen?'none':'block';el.classList.toggle('open',!isOpen)}}
+</script></body></html>'''
 
     with open(fpath, "w", encoding="utf-8") as f:
         f.write(html)
