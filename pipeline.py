@@ -1211,7 +1211,10 @@ def generate_html(analysis, transcript_text="", lang_code="ru"):
         rh += f'<div class="rc rc-ok">✅ {e(s2)}</div>'
     for ap in rc.get("attention_points", []):
         rh += f'<div class="rc rc-warn">⚠️ {e(ap)}</div>'
-    for r in rc.get("recommendations", []):
+    for r in rc.get("substantive", rc.get("recommendations", [])):
+        if isinstance(r, str):
+            rh += f'<div class="rc rc-rec">• <b>{e(r)}</b></div>'
+            continue
         ic = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(r.get("priority", ""), "•")
         why_html = f'<p class="rc-why"><b>Почему:</b> {e(r["why"])}</p>' if r.get("why") else ""
         how_html = f'<p class="rc-how"><b>Как:</b> {e(r["how"])}</p>' if r.get("how") else ""
