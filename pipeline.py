@@ -267,15 +267,28 @@ def make_slug(analysis):
 # ───────────────────────────────────────────────────
 # PDF FONT SETUP (called once at module load)
 # ───────────────────────────────────────────────────
+# Uses FreeSans – bundled in fonts/ folder in the project root.
+# Supports: Latin, Cyrillic (Russian), Kazakh, Spanish, and 100+ other scripts.
+# Full 4-weight family: Normal, Bold, Oblique, BoldOblique.
+# For Chinese: NotoSansSC bundled separately (fonts/NotoSansSC-Regular.ttf).
+# No system font dependencies – works on any Docker image.
+# ───────────────────────────────────────────────────
 
 _PDF_FONTS_REGISTERED = False
 _PDF_FONT_NORMAL = "Helvetica"
 _PDF_FONT_BOLD = "Helvetica-Bold"
 _PDF_FONT_ITALIC = "Helvetica-Oblique"
 
+# Font directory: relative to this file (project_root/fonts/)
+_FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+
 
 def _register_pdf_fonts():
-    """Register DejaVu fonts with proper font family for Cyrillic support."""
+    """Register bundled FreeSans fonts with full 4-weight family.
+
+    FreeSans covers: Latin, Cyrillic, Greek, Arabic, Hebrew, Kazakh, and more.
+    For Chinese (zh): tries NotoSansSC-Regular.ttf from the same fonts/ dir.
+    """
     global _PDF_FONTS_REGISTERED, _PDF_FONT_NORMAL, _PDF_FONT_BOLD, _PDF_FONT_ITALIC
 
     if _PDF_FONTS_REGISTERED:
@@ -284,44 +297,69 @@ def _register_pdf_fonts():
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
 
-    FONT_DIR = "/usr/share/fonts/truetype/dejavu"
-    font_files = {
-        "DejaVu":            os.path.join(FONT_DIR, "DejaVuSans.ttf"),
-        "DejaVu-Bold":       os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf"),
-        "DejaVu-Oblique":    os.path.join(FONT_DIR, "DejaVuSans-Oblique.ttf"),
-        "DejaVu-BoldOblique": os.path.join(FONT_DIR, "DejaVuSans-BoldOblique.ttf"),
+    font_map = {
+        "FreeSans":            os.path.join(_FONT_DIR, "FreeSans.ttf"),
+        "FreeSans-Bold":       os.path.join(_FONT_DIR, "FreeSansBold.ttf"),
+        "FreeSans-Oblique":    os.path.join(_FONT_DIR, "FreeSansOblique.ttf"),
+        "FreeSans-BoldOblique": os.path.join(_FONT_DIR, "FreeSansBoldOblique.ttf"),
     }
 
-    # Check all files exist
-    missing = [name for name, path in font_files.items() if not os.path.exists(path)]
+    # Check all 4 files exist
+    missing = [name for name, path in font_map.items() if not os.path.exists(path)]
     if missing:
-        log.error(f"PDF FONTS MISSING: {missing}. Cyrillic will NOT render correctly!")
-        log.error(f"Expected font dir: {FONT_DIR}")
-        log.error("Fix: apt-get install -y fonts-dejavu-core")
+        log.error(f"BUNDLED FONTS MISSING: {missing}")
+        log.error(f"Expected in: {_FONT_DIR}")
+        log.error("Make sure the fonts/ folder is included in the project repo.")
+        log.error("Falling back to Helvetica – Cyrillic WILL NOT render!")
         return
 
     try:
-        for name, path in font_files.items():
+        for name, path in font_map.items():
             pdfmetrics.registerFont(TTFont(name, path))
-            log.info(f"Registered font: {name} -> {path}")
 
-        # THIS IS THE KEY FIX: register font family so <b> and <i> tags work in Paragraphs
+        # Register font family – enables <b> and <i> in ReportLab Paragraphs
         pdfmetrics.registerFontFamily(
-            "DejaVu",
-            normal="DejaVu",
-            bold="DejaVu-Bold",
-            italic="DejaVu-Oblique",
-            boldItalic="DejaVu-BoldOblique",
+            "FreeSans",
+            normal="FreeSans",
+            bold="FreeSans-Bold",
+            italic="FreeSans-Oblique",
+            boldItalic="FreeSans-BoldOblique",
         )
-        log.info("Registered DejaVu font family (normal/bold/italic/boldItalic)")
 
-        _PDF_FONT_NORMAL = "DejaVu"
-        _PDF_FONT_BOLD = "DejaVu-Bold"
-        _PDF_FONT_ITALIC = "DejaVu-Oblique"
+        _PDF_FONT_NORMAL = "FreeSans"
+        _PDF_FONT_BOLD = "FreeSans-Bold"
+        _PDF_FONT_ITALIC = "FreeSans-Oblique"
         _PDF_FONTS_REGISTERED = True
+        log.info(f"PDF fonts registered: FreeSans family (4 weights) from {_FONT_DIR}")
 
     except Exception as e:
         log.error(f"Font registration FAILED: {e}. Falling back to Helvetica (no Cyrillic!).")
+
+
+def _register_chinese_font():
+    """Register NotoSansSC for Chinese PDF reports. Call only when lang_code == 'zh'."""
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    noto_path = os.path.join(_FONT_DIR, "NotoSansSC-Regular.ttf")
+    if os.path.exists(noto_path):
+        try:
+            pdfmetrics.registerFont(TTFont("NotoSansSC", noto_path))
+            # Register as family (single weight – no bold/italic for CJK)
+            pdfmetrics.registerFontFamily(
+                "NotoSansSC",
+                normal="NotoSansSC",
+                bold="NotoSansSC",
+                italic="NotoSansSC",
+                boldItalic="NotoSansSC",
+            )
+            log.info(f"Chinese font registered: NotoSansSC from {noto_path}")
+            return "NotoSansSC"
+        except Exception as e:
+            log.warning(f"Chinese font failed: {e}. Chinese text may not render.")
+    else:
+        log.warning(f"NotoSansSC-Regular.ttf not found in {_FONT_DIR}. Chinese reports will use FreeSans (limited CJK).")
+    return None
 
 
 # Register fonts at module load
@@ -345,27 +383,228 @@ def generate_pdf(analysis, lang_code="ru"):
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
 
+    # ── i18n: all UI strings by language ─────────────────────────
+    I18N = {
+        "ru": {
+            "brand": "Цифровой Умник",
+            "report_from": "Отчёт от",
+            "page": "Стр.",
+            "generated": "Сгенерировано",
+            "date": "Дата",
+            "duration": "Длительность",
+            "participants": "Участники",
+            "format": "Формат",
+            "domain": "Область",
+            "tone": "Тон",
+            "topics": "ТЕМЫ ОБСУЖДЕНИЯ",
+            "outcome": "Итог",
+            "decisions": "РЕШЕНИЯ",
+            "decision": "Решение",
+            "responsible": "Ответственный",
+            "status": "Статус",
+            "open_questions": "ОТКРЫТЫЕ ВОПРОСЫ",
+            "reason": "Причина",
+            "dynamics": "ДИНАМИКА ВСТРЕЧИ",
+            "participation": "Баланс участия",
+            "interruptions": "Перебивания",
+            "enthusiasm": "Энтузиазм",
+            "tension": "Напряжение",
+            "turning_points": "Переломные моменты",
+            "between_lines": "Между строк",
+            "recommendations": "РЕКОМЕНДАЦИИ ЦИФРОВОГО УМНИКА",
+            "recommendation": "Рекомендация",
+            "why": "Почему",
+            "how": "Как",
+            "next_meeting": "Вопросы для следующей встречи",
+            "tasks": "ЗАДАЧИ",
+            "task": "Задача",
+            "deadline": "Срок",
+            "uncertainties": "ТРЕБУЕТ УТОЧНЕНИЯ",
+            "context": "Контекст",
+            "possibly": "Возможно",
+            "corrections": "ИСПРАВЛЕНИЯ РАСПОЗНАВАНИЯ",
+            "glossary": "ГЛОССАРИЙ",
+            "footer": "AI-анализ встречи",
+        },
+        "en": {
+            "brand": "Digital Smarty",
+            "report_from": "Report from",
+            "page": "Page",
+            "generated": "Generated",
+            "date": "Date",
+            "duration": "Duration",
+            "participants": "Participants",
+            "format": "Format",
+            "domain": "Domain",
+            "tone": "Tone",
+            "topics": "DISCUSSION TOPICS",
+            "outcome": "Outcome",
+            "decisions": "DECISIONS",
+            "decision": "Decision",
+            "responsible": "Responsible",
+            "status": "Status",
+            "open_questions": "OPEN QUESTIONS",
+            "reason": "Reason",
+            "dynamics": "MEETING DYNAMICS",
+            "participation": "Participation balance",
+            "interruptions": "Interruptions",
+            "enthusiasm": "Enthusiasm",
+            "tension": "Tension",
+            "turning_points": "Turning points",
+            "between_lines": "Between the lines",
+            "recommendations": "DIGITAL SMARTY RECOMMENDATIONS",
+            "recommendation": "Recommendation",
+            "why": "Why",
+            "how": "How",
+            "next_meeting": "Questions for next meeting",
+            "tasks": "ACTION ITEMS",
+            "task": "Task",
+            "deadline": "Deadline",
+            "uncertainties": "NEEDS CLARIFICATION",
+            "context": "Context",
+            "possibly": "Possibly",
+            "corrections": "TRANSCRIPTION CORRECTIONS",
+            "glossary": "GLOSSARY",
+            "footer": "AI meeting analysis",
+        },
+        "kk": {
+            "brand": "Цифрлық Ақылды",
+            "report_from": "Есеп күні",
+            "page": "Бет",
+            "generated": "Жасалған",
+            "date": "Күні",
+            "duration": "Ұзақтығы",
+            "participants": "Қатысушылар",
+            "format": "Формат",
+            "domain": "Сала",
+            "tone": "Тон",
+            "topics": "ТАЛҚЫЛАУ ТАҚЫРЫПТАРЫ",
+            "outcome": "Нәтиже",
+            "decisions": "ШЕШІМДЕР",
+            "decision": "Шешім",
+            "responsible": "Жауапты",
+            "status": "Мәртебесі",
+            "open_questions": "АШЫҚ СҰРАҚТАР",
+            "reason": "Себеп",
+            "dynamics": "КЕЗДЕСУ ДИНАМИКАСЫ",
+            "participation": "Қатысу балансы",
+            "interruptions": "Сөзін бөлу",
+            "enthusiasm": "Ынта",
+            "tension": "Шиеленіс",
+            "turning_points": "Бетбұрыс сәттер",
+            "between_lines": "Жолдар арасында",
+            "recommendations": "ЦИФРЛЫҚ АҚЫЛДЫ ҰСЫНЫСТАРЫ",
+            "recommendation": "Ұсыныс",
+            "why": "Неліктен",
+            "how": "Қалай",
+            "next_meeting": "Келесі кездесуге сұрақтар",
+            "tasks": "ТАПСЫРМАЛАР",
+            "task": "Тапсырма",
+            "deadline": "Мерзімі",
+            "uncertainties": "НАҚТЫЛАУДЫ ҚАЖЕТ ЕТЕДІ",
+            "context": "Контекст",
+            "possibly": "Мүмкін",
+            "corrections": "ТАНУ ТҮЗЕТУЛЕРІ",
+            "glossary": "ГЛОССАРИЙ",
+            "footer": "AI кездесу талдауы",
+        },
+        "es": {
+            "brand": "Digital Smarty",
+            "report_from": "Informe del",
+            "page": "Pág.",
+            "generated": "Generado",
+            "date": "Fecha",
+            "duration": "Duración",
+            "participants": "Participantes",
+            "format": "Formato",
+            "domain": "Área",
+            "tone": "Tono",
+            "topics": "TEMAS DE DISCUSIÓN",
+            "outcome": "Resultado",
+            "decisions": "DECISIONES",
+            "decision": "Decisión",
+            "responsible": "Responsable",
+            "status": "Estado",
+            "open_questions": "PREGUNTAS ABIERTAS",
+            "reason": "Razón",
+            "dynamics": "DINÁMICA DE LA REUNIÓN",
+            "participation": "Balance de participación",
+            "interruptions": "Interrupciones",
+            "enthusiasm": "Entusiasmo",
+            "tension": "Tensión",
+            "turning_points": "Puntos de inflexión",
+            "between_lines": "Entre líneas",
+            "recommendations": "RECOMENDACIONES DE DIGITAL SMARTY",
+            "recommendation": "Recomendación",
+            "why": "Por qué",
+            "how": "Cómo",
+            "next_meeting": "Preguntas para la próxima reunión",
+            "tasks": "TAREAS",
+            "task": "Tarea",
+            "deadline": "Plazo",
+            "uncertainties": "NECESITA ACLARACIÓN",
+            "context": "Contexto",
+            "possibly": "Posiblemente",
+            "corrections": "CORRECCIONES DE TRANSCRIPCIÓN",
+            "glossary": "GLOSARIO",
+            "footer": "Análisis de reunión con IA",
+        },
+        "zh": {
+            "brand": "数字智囊",
+            "report_from": "报告日期",
+            "page": "页",
+            "generated": "生成时间",
+            "date": "日期",
+            "duration": "时长",
+            "participants": "参与者",
+            "format": "格式",
+            "domain": "领域",
+            "tone": "语气",
+            "topics": "讨论主题",
+            "outcome": "结果",
+            "decisions": "决策",
+            "decision": "决定",
+            "responsible": "负责人",
+            "status": "状态",
+            "open_questions": "待解决问题",
+            "reason": "原因",
+            "dynamics": "会议动态",
+            "participation": "参与平衡",
+            "interruptions": "打断",
+            "enthusiasm": "热情",
+            "tension": "紧张",
+            "turning_points": "转折点",
+            "between_lines": "言外之意",
+            "recommendations": "数字智囊建议",
+            "recommendation": "建议",
+            "why": "原因",
+            "how": "方法",
+            "next_meeting": "下次会议问题",
+            "tasks": "任务",
+            "task": "任务",
+            "deadline": "截止日期",
+            "uncertainties": "需要澄清",
+            "context": "上下文",
+            "possibly": "可能",
+            "corrections": "转录修正",
+            "glossary": "术语表",
+            "footer": "AI会议分析",
+        },
+    }
+
+    # Select language, fallback to Russian
+    L = I18N.get(lang_code, I18N.get("ru"))
+
     # Use registered fonts
     fn = _PDF_FONT_NORMAL
     fb = _PDF_FONT_BOLD
     fi = _PDF_FONT_ITALIC
 
-    # Chinese override: try Noto CJK
+    # Chinese override: use bundled NotoSansSC
     if lang_code == "zh":
-        noto_paths = [
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
-            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-        ]
-        for np in noto_paths:
-            if os.path.exists(np):
-                try:
-                    pdfmetrics.registerFont(TTFont("NotoZH", np, subfontIndex=0))
-                    fn, fb, fi = "NotoZH", "NotoZH", "NotoZH"
-                    log.info(f"Chinese font loaded: {np}")
-                    break
-                except Exception as e:
-                    log.warning(f"Noto CJK failed: {e}")
+        zh_font = _register_chinese_font()
+        if zh_font:
+            fn, fb, fi = zh_font, zh_font, zh_font
 
     # Colors
     DARK = HexColor("#1a1a2e")
@@ -391,18 +630,15 @@ def generate_pdf(analysis, lang_code="ru"):
     # ── Header / Footer ──────────────────────────────────────────
     def _header_footer(canvas, doc):
         canvas.saveState()
-        # Top accent line
         canvas.setStrokeColor(ACCENT)
         canvas.setLineWidth(2)
         canvas.line(1.8*cm, A4[1] - 1.2*cm, A4[0] - 1.8*cm, A4[1] - 1.2*cm)
-        # Header text
         try:
             canvas.setFont(fb, 8)
         except Exception:
             canvas.setFont("Helvetica-Bold", 8)
         canvas.setFillColor(GRAY)
-        canvas.drawString(1.8*cm, A4[1] - 1.1*cm, "Цифровой Умник")
-        # Footer
+        canvas.drawString(1.8*cm, A4[1] - 1.1*cm, L["brand"])
         try:
             canvas.setFont(fn, 7)
         except Exception:
@@ -410,7 +646,7 @@ def generate_pdf(analysis, lang_code="ru"):
         canvas.setFillColor(GRAY)
         canvas.drawCentredString(
             A4[0] / 2, 0.8*cm,
-            f"Стр. {doc.page} | Сгенерировано: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+            f"{L['page']} {doc.page} | {L['generated']}: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         )
         canvas.setStrokeColor(BORDER)
         canvas.setLineWidth(0.5)
@@ -434,9 +670,7 @@ def generate_pdf(analysis, lang_code="ru"):
     def section_header(num, title):
         return Paragraph(f"<b>{num}.</b> {e(title)}", h1)
 
-    # ── Helpers for table text ────────────────────────────────────
     def cell(text, style=body):
-        """Wrap text in Paragraph for proper font rendering in tables."""
         return Paragraph(e(text) if isinstance(text, str) else str(text), style)
 
     def cell_bold(text):
@@ -446,8 +680,8 @@ def generate_pdf(analysis, lang_code="ru"):
     p = analysis.get("passport", {})
 
     # === HEADER ===
-    st.append(Paragraph("Цифровой Умник", title_s))
-    st.append(Paragraph(f"Отчёт от {ds}", subtitle_s))
+    st.append(Paragraph(L["brand"], title_s))
+    st.append(Paragraph(f"{L['report_from']} {ds}", subtitle_s))
     st.append(hr())
 
     # === SUMMARY ===
@@ -458,9 +692,9 @@ def generate_pdf(analysis, lang_code="ru"):
 
     # === PASSPORT TABLE ===
     passport_data = [
-        [cell_bold("Дата"), cell(p.get("date", "\u2013")), cell_bold("Длительность"), cell(p.get("duration_estimate", "\u2013"))],
-        [cell_bold("Участники"), cell(str(p.get("participants_count", "\u2013"))), cell_bold("Формат"), cell(p.get("format", "\u2013"))],
-        [cell_bold("Область"), cell(p.get("domain", "\u2013")), cell_bold("Тон"), cell(p.get("tone", "\u2013"))],
+        [cell_bold(L["date"]), cell(p.get("date", "\u2013")), cell_bold(L["duration"]), cell(p.get("duration_estimate", "\u2013"))],
+        [cell_bold(L["participants"]), cell(str(p.get("participants_count", "\u2013"))), cell_bold(L["format"]), cell(p.get("format", "\u2013"))],
+        [cell_bold(L["domain"]), cell(p.get("domain", "\u2013")), cell_bold(L["tone"]), cell(p.get("tone", "\u2013"))],
     ]
     pt = Table(passport_data, colWidths=[W*0.15, W*0.35, W*0.15, W*0.35])
     pt.setStyle(TableStyle([
@@ -478,7 +712,7 @@ def generate_pdf(analysis, lang_code="ru"):
     # === TOPICS ===
     topics = analysis.get("topics", [])
     if topics:
-        st.append(section_header(1, "ТЕМЫ ОБСУЖДЕНИЯ"))
+        st.append(section_header(1, L["topics"]))
         for i, tp in enumerate(topics, 1):
             topic_items = []
             topic_items.append(Paragraph(f"<b>{i}. {e(tp.get('title', ''))}</b>", h2))
@@ -491,7 +725,7 @@ def generate_pdf(analysis, lang_code="ru"):
             for sp, pos in tp.get("positions", {}).items():
                 topic_items.append(Paragraph(f"<b>{e(sp)}:</b> {e(pos)}", bullet))
             if tp.get("outcome"):
-                topic_items.append(Paragraph(f"<b>Итог:</b> {e(tp['outcome'])}", body))
+                topic_items.append(Paragraph(f"<b>{L['outcome']}:</b> {e(tp['outcome'])}", body))
             for q in tp.get("quotes", [])[:2]:
                 topic_items.append(Paragraph(f"\u00ab{e(q)}\u00bb", body_italic))
             if tp.get("unresolved"):
@@ -503,8 +737,8 @@ def generate_pdf(analysis, lang_code="ru"):
     # === DECISIONS ===
     decs = analysis.get("decisions", [])
     if decs:
-        st.append(section_header(2, "РЕШЕНИЯ"))
-        dec_header = [cell_bold(""), cell_bold("Решение"), cell_bold("Ответственный"), cell_bold("Статус")]
+        st.append(section_header(2, L["decisions"]))
+        dec_header = [cell_bold(""), cell_bold(L["decision"]), cell_bold(L["responsible"]), cell_bold(L["status"])]
         dec_rows = [dec_header]
         for d in decs:
             status = d.get("status", "")
@@ -529,42 +763,42 @@ def generate_pdf(analysis, lang_code="ru"):
     # === UNRESOLVED QUESTIONS ===
     uqs = analysis.get("unresolved_questions", [])
     if uqs:
-        st.append(section_header(3, "ОТКРЫТЫЕ ВОПРОСЫ"))
+        st.append(section_header(3, L["open_questions"]))
         for uq in uqs:
             st.append(Paragraph(f"<b>{e(uq.get('question', ''))}</b>", body_bold))
             if uq.get("reason"):
-                st.append(Paragraph(f"Причина: {e(uq['reason'])}", bullet))
+                st.append(Paragraph(f"{L['reason']}: {e(uq['reason'])}", bullet))
         st.append(Spacer(1, 2*mm))
 
     # === DYNAMICS ===
     dy = analysis.get("dynamics", {})
     if dy:
-        st.append(section_header(4, "ДИНАМИКА ВСТРЕЧИ"))
+        st.append(section_header(4, L["dynamics"]))
         balance = dy.get("participation_balance", {})
         if balance:
-            st.append(Paragraph("<b>Баланс участия:</b>", body_bold))
+            st.append(Paragraph(f"<b>{L['participation']}:</b>", body_bold))
             bal_items = [f"{e(sp)}: {e(pc)}" for sp, pc in balance.items()]
             st.append(Paragraph(" | ".join(bal_items), body))
 
         ip = dy.get("interaction_patterns", {})
         if ip.get("interruptions"):
-            st.append(Paragraph(f"<b>Перебивания:</b> {e(ip['interruptions'])}", body))
+            st.append(Paragraph(f"<b>{L['interruptions']}:</b> {e(ip['interruptions'])}", body))
 
         em = dy.get("emotional_map", {})
-        for key, label, icon in [
-            ("enthusiasm_moments", "Энтузиазм", ""),
-            ("tension_moments", "Напряжение", ""),
-            ("turning_points", "Переломные моменты", ""),
+        for key, label_key in [
+            ("enthusiasm_moments", "enthusiasm"),
+            ("tension_moments", "tension"),
+            ("turning_points", "turning_points"),
         ]:
             items = em.get(key, [])
             if items:
-                st.append(Paragraph(f"<b>{label}:</b>", body_bold))
+                st.append(Paragraph(f"<b>{L[label_key]}:</b>", body_bold))
                 for it in items:
                     st.append(Paragraph(f"\u2022 {e(it)}", bullet))
 
         unspoken = dy.get("unspoken", [])
         if unspoken:
-            st.append(Paragraph("<b>Между строк:</b>", body_bold))
+            st.append(Paragraph(f"<b>{L['between_lines']}:</b>", body_bold))
             for u in unspoken:
                 st.append(Paragraph(f"\u2022 {e(u)}", bullet))
         st.append(Spacer(1, 2*mm))
@@ -574,7 +808,7 @@ def generate_pdf(analysis, lang_code="ru"):
     if rc:
         st.append(hr())
         rec_h = ParagraphStyle("RecH", fontName=fb, fontSize=12, textColor=DARK, spaceBefore=2*mm, spaceAfter=3*mm)
-        st.append(Paragraph("<b>РЕКОМЕНДАЦИИ ЦИФРОВОГО УМНИКА</b>", rec_h))
+        st.append(Paragraph(f"<b>{L['recommendations']}</b>", rec_h))
 
         for s2 in rc.get("strengths", []):
             st.append(Paragraph(f"\u2705 {e(s2)}", body))
@@ -589,27 +823,27 @@ def generate_pdf(analysis, lang_code="ru"):
                 p_label = {"high": "[!!!]", "medium": "[!!]", "low": "[!]"}.get(priority, "")
                 rec_items = []
                 rec_items.append(Paragraph(
-                    f"<b>{p_label} Рекомендация {idx}: {e(r.get('what', ''))}</b>", body_bold
+                    f"<b>{p_label} {L['recommendation']} {idx}: {e(r.get('what', ''))}</b>", body_bold
                 ))
                 if r.get("why"):
-                    rec_items.append(Paragraph(f"Почему: {e(r['why'])}", bullet))
+                    rec_items.append(Paragraph(f"{L['why']}: {e(r['why'])}", bullet))
                 if r.get("how"):
-                    rec_items.append(Paragraph(f"Как: {e(r['how'])}", bullet))
+                    rec_items.append(Paragraph(f"{L['how']}: {e(r['how'])}", bullet))
                 st.append(KeepTogether(rec_items))
                 st.append(Spacer(1, 1.5*mm))
 
         nmq = rc.get("next_meeting_questions", [])
         if nmq:
             st.append(Spacer(1, 2*mm))
-            st.append(Paragraph("<b>Вопросы для следующей встречи:</b>", body_bold))
+            st.append(Paragraph(f"<b>{L['next_meeting']}:</b>", body_bold))
             for q in nmq:
                 st.append(Paragraph(f"\u2192 {e(q)}", bullet))
 
     # === ACTION ITEMS ===
     ais = analysis.get("action_items", [])
     if ais:
-        st.append(section_header(5, "ЗАДАЧИ"))
-        ai_header = [cell_bold("Задача"), cell_bold("Ответственный"), cell_bold("Срок")]
+        st.append(section_header(5, L["tasks"]))
+        ai_header = [cell_bold(L["task"]), cell_bold(L["responsible"]), cell_bold(L["deadline"])]
         ai_rows = [ai_header]
         for a in ais:
             ai_rows.append([
@@ -632,19 +866,19 @@ def generate_pdf(analysis, lang_code="ru"):
     # === UNCERTAINTIES ===
     unc = analysis.get("uncertainties", [])
     if unc:
-        st.append(section_header(6, "ТРЕБУЕТ УТОЧНЕНИЯ"))
+        st.append(section_header(6, L["uncertainties"]))
         for u in unc:
             st.append(Paragraph(f"<b>\u00ab{e(u.get('text', ''))}\u00bb</b>", body_bold))
             if u.get("context"):
-                st.append(Paragraph(f"Контекст: {e(u['context'])}", bullet))
+                st.append(Paragraph(f"{L['context']}: {e(u['context'])}", bullet))
             if u.get("possible_meaning"):
-                st.append(Paragraph(f"Возможно: {e(u['possible_meaning'])}", bullet))
+                st.append(Paragraph(f"{L['possibly']}: {e(u['possible_meaning'])}", bullet))
         st.append(Spacer(1, 2*mm))
 
     # === CORRECTED TERMS ===
     ct = analysis.get("corrected_terms", [])
     if ct:
-        st.append(section_header(7, "ИСПРАВЛЕНИЯ РАСПОЗНАВАНИЯ"))
+        st.append(section_header(7, L["corrections"]))
         for c in ct:
             st.append(Paragraph(
                 f"\u00ab{e(c.get('original', ''))}\u00bb \u2192 <b>{e(c.get('corrected', ''))}</b>", body
@@ -654,7 +888,7 @@ def generate_pdf(analysis, lang_code="ru"):
     # === GLOSSARY ===
     gl = analysis.get("glossary", [])
     if gl:
-        st.append(section_header(8, "ГЛОССАРИЙ"))
+        st.append(section_header(8, L["glossary"]))
         for g in gl:
             st.append(Paragraph(
                 f"<b>{e(g.get('term', ''))}</b> \u2013 {e(g.get('definition', ''))}", body
@@ -664,7 +898,7 @@ def generate_pdf(analysis, lang_code="ru"):
     # === FOOTER ===
     st.append(Spacer(1, 5*mm))
     st.append(hr())
-    st.append(Paragraph(f"Цифровой Умник \u2022 {ds} \u2022 AI-анализ встречи", footer_s))
+    st.append(Paragraph(f"{L['brand']} \u2022 {ds} \u2022 {L['footer']}", footer_s))
 
     doc.build(st, onFirstPage=_header_footer, onLaterPages=_header_footer)
     log.info(f"PDF: {fname} ({os.path.getsize(fpath)} bytes)")
