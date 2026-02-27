@@ -977,14 +977,14 @@ def generate_pdf(analysis, lang_code="ru"):
     if swot and any(swot.get(k) for k in ["strengths", "weaknesses", "opportunities", "threats"]):
         st.append(section_header(5.2, L.get("swot_title", "СТРАТЕГИЧЕСКИЙ SWOT-АНАЛИЗ")))
         swot_data = [
-            [cell(f"<b>{L.get('swot_s', 'Сильные стороны')}</b>", body_bold),
-             cell(f"<b>{L.get('swot_w', 'Слабые стороны')}</b>", body_bold)],
-            [cell("<br/>".join(f"\u2022 {e(x)}" for x in swot.get("strengths", [])), body),
-             cell("<br/>".join(f"\u2022 {e(x)}" for x in swot.get("weaknesses", [])), body)],
-            [cell(f"<b>{L.get('swot_o', 'Возможности')}</b>", body_bold),
-             cell(f"<b>{L.get('swot_t', 'Угрозы')}</b>", body_bold)],
-            [cell("<br/>".join(f"\u2022 {e(x)}" for x in swot.get("opportunities", [])), body),
-             cell("<br/>".join(f"\u2022 {e(x)}" for x in swot.get("threats", [])), body)],
+            [cell_bold(L.get('swot_s', 'Сильные стороны')),
+             cell_bold(L.get('swot_w', 'Слабые стороны'))],
+            [Paragraph("<br/>".join(f"\u2022 {e(x)}" for x in swot.get("strengths", [])), body),
+             Paragraph("<br/>".join(f"\u2022 {e(x)}" for x in swot.get("weaknesses", [])), body)],
+            [cell_bold(L.get('swot_o', 'Возможности')),
+             cell_bold(L.get('swot_t', 'Угрозы'))],
+            [Paragraph("<br/>".join(f"\u2022 {e(x)}" for x in swot.get("opportunities", [])), body),
+             Paragraph("<br/>".join(f"\u2022 {e(x)}" for x in swot.get("threats", [])), body)],
         ]
         sw_t = Table(swot_data, colWidths=[W/2]*2)
         sw_t.setStyle(TableStyle([
@@ -1006,10 +1006,10 @@ def generate_pdf(analysis, lang_code="ru"):
     if risks:
         st.append(section_header(5.3, L.get("risks_title", "РИСКИ И КАК ИХ ИЗБЕЖАТЬ")))
         risk_header = [
-            cell(f"<b>{L.get('risk', 'Риск')}</b>", body_bold),
-            cell(f"<b>{L.get('probability', 'Вероятность')}</b>", body_bold),
-            cell(f"<b>{L.get('impact_label', 'Влияние')}</b>", body_bold),
-            cell(f"<b>{L.get('mitigation', 'Как предотвратить')}</b>", body_bold),
+            cell_bold(L.get('risk', 'Риск')),
+            cell_bold(L.get('probability', 'Вероятность')),
+            cell_bold(L.get('impact_label', 'Влияние')),
+            cell_bold(L.get('mitigation', 'Как предотвратить')),
         ]
         risk_rows = [risk_header]
         for r in risks:
