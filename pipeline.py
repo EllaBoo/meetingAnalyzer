@@ -264,30 +264,93 @@ def make_slug(analysis):
     return re.sub(r"[^\w\s-]", "", raw).strip().replace(" ", "_")[:50]
 
 
-def generate_pdf(analysis, lang_code="ru"):
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm, mm
-    from reportlab.lib.colors import HexColor, Color
-    from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-        HRFlowable, KeepTogether,
-    )
-    from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
+# ───────────────────────────────────────────────────
+# PDF FONT SETUP (called once at module load)
+# ───────────────────────────────────────────────────
+
+_PDF_FONTS_REGISTERED = False
+_PDF_FONT_NORMAL = "Helvetica"
+_PDF_FONT_BOLD = "Helvetica-Bold"
+_PDF_FONT_ITALIC = "Helvetica-Oblique"
+
+
+def _register_pdf_fonts():
+    """Register DejaVu fonts with proper font family for Cyrillic support."""
+    global _PDF_FONTS_REGISTERED, _PDF_FONT_NORMAL, _PDF_FONT_BOLD, _PDF_FONT_ITALIC
+
+    if _PDF_FONTS_REGISTERED:
+        return
+
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
 
-    # Default: DejaVu (supports Latin, Cyrillic, Kazakh)
-    fn, fb, fi = "Helvetica", "Helvetica-Bold", "Helvetica-Oblique"
-    try:
-        pdfmetrics.registerFont(TTFont("DV", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
-        pdfmetrics.registerFont(TTFont("DVB", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"))
-        pdfmetrics.registerFont(TTFont("DVI", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf"))
-        fn, fb, fi = "DV", "DVB", "DVI"
-    except Exception:
-        pass
+    FONT_DIR = "/usr/share/fonts/truetype/dejavu"
+    font_files = {
+        "DejaVu":            os.path.join(FONT_DIR, "DejaVuSans.ttf"),
+        "DejaVu-Bold":       os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf"),
+        "DejaVu-Oblique":    os.path.join(FONT_DIR, "DejaVuSans-Oblique.ttf"),
+        "DejaVu-BoldOblique": os.path.join(FONT_DIR, "DejaVuSans-BoldOblique.ttf"),
+    }
 
-    # Chinese: try Noto CJK (only if zh selected)
+    # Check all files exist
+    missing = [name for name, path in font_files.items() if not os.path.exists(path)]
+    if missing:
+        log.error(f"PDF FONTS MISSING: {missing}. Cyrillic will NOT render correctly!")
+        log.error(f"Expected font dir: {FONT_DIR}")
+        log.error("Fix: apt-get install -y fonts-dejavu-core")
+        return
+
+    try:
+        for name, path in font_files.items():
+            pdfmetrics.registerFont(TTFont(name, path))
+            log.info(f"Registered font: {name} -> {path}")
+
+        # THIS IS THE KEY FIX: register font family so <b> and <i> tags work in Paragraphs
+        pdfmetrics.registerFontFamily(
+            "DejaVu",
+            normal="DejaVu",
+            bold="DejaVu-Bold",
+            italic="DejaVu-Oblique",
+            boldItalic="DejaVu-BoldOblique",
+        )
+        log.info("Registered DejaVu font family (normal/bold/italic/boldItalic)")
+
+        _PDF_FONT_NORMAL = "DejaVu"
+        _PDF_FONT_BOLD = "DejaVu-Bold"
+        _PDF_FONT_ITALIC = "DejaVu-Oblique"
+        _PDF_FONTS_REGISTERED = True
+
+    except Exception as e:
+        log.error(f"Font registration FAILED: {e}. Falling back to Helvetica (no Cyrillic!).")
+
+
+# Register fonts at module load
+_register_pdf_fonts()
+
+
+# ───────────────────────────────────────────────────
+# PDF GENERATION (FIXED)
+# ───────────────────────────────────────────────────
+
+def generate_pdf(analysis, lang_code="ru"):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import cm, mm
+    from reportlab.lib.colors import HexColor
+    from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+        HRFlowable, KeepTogether, PageBreak,
+    )
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    # Use registered fonts
+    fn = _PDF_FONT_NORMAL
+    fb = _PDF_FONT_BOLD
+    fi = _PDF_FONT_ITALIC
+
+    # Chinese override: try Noto CJK
     if lang_code == "zh":
         noto_paths = [
             "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
@@ -299,9 +362,10 @@ def generate_pdf(analysis, lang_code="ru"):
                 try:
                     pdfmetrics.registerFont(TTFont("NotoZH", np, subfontIndex=0))
                     fn, fb, fi = "NotoZH", "NotoZH", "NotoZH"
+                    log.info(f"Chinese font loaded: {np}")
                     break
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.warning(f"Noto CJK failed: {e}")
 
     # Colors
     DARK = HexColor("#1a1a2e")
@@ -310,8 +374,7 @@ def generate_pdf(analysis, lang_code="ru"):
     LIGHT_BG = HexColor("#f8f9fa")
     BORDER = HexColor("#dee2e6")
     GRAY = HexColor("#6c757d")
-    GREEN = HexColor("#28a745")
-    ORANGE = HexColor("#fd7e14")
+    WHITE = HexColor("#ffffff")
 
     slug = make_slug(analysis)
     ds = datetime.now().strftime("%Y-%m-%d")
@@ -323,10 +386,38 @@ def generate_pdf(analysis, lang_code="ru"):
         topMargin=1.5*cm, bottomMargin=1.5*cm,
     )
     e = esc
-    W = A4[0] - 3.6*cm  # usable width
+    W = A4[0] - 3.6*cm
 
-    # Styles
-    S = getSampleStyleSheet()
+    # ── Header / Footer ──────────────────────────────────────────
+    def _header_footer(canvas, doc):
+        canvas.saveState()
+        # Top accent line
+        canvas.setStrokeColor(ACCENT)
+        canvas.setLineWidth(2)
+        canvas.line(1.8*cm, A4[1] - 1.2*cm, A4[0] - 1.8*cm, A4[1] - 1.2*cm)
+        # Header text
+        try:
+            canvas.setFont(fb, 8)
+        except Exception:
+            canvas.setFont("Helvetica-Bold", 8)
+        canvas.setFillColor(GRAY)
+        canvas.drawString(1.8*cm, A4[1] - 1.1*cm, "Цифровой Умник")
+        # Footer
+        try:
+            canvas.setFont(fn, 7)
+        except Exception:
+            canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(GRAY)
+        canvas.drawCentredString(
+            A4[0] / 2, 0.8*cm,
+            f"Стр. {doc.page} | Сгенерировано: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        )
+        canvas.setStrokeColor(BORDER)
+        canvas.setLineWidth(0.5)
+        canvas.line(1.8*cm, 1.1*cm, A4[0] - 1.8*cm, 1.1*cm)
+        canvas.restoreState()
+
+    # ── Styles ────────────────────────────────────────────────────
     title_s = ParagraphStyle("T", fontName=fb, fontSize=20, textColor=DARK, spaceAfter=2*mm, leading=24)
     subtitle_s = ParagraphStyle("Sub", fontName=fn, fontSize=10, textColor=GRAY, spaceAfter=4*mm)
     h1 = ParagraphStyle("H1", fontName=fb, fontSize=12, textColor=ACCENT, spaceBefore=5*mm, spaceAfter=2*mm, leading=15)
@@ -343,36 +434,43 @@ def generate_pdf(analysis, lang_code="ru"):
     def section_header(num, title):
         return Paragraph(f"<b>{num}.</b> {e(title)}", h1)
 
+    # ── Helpers for table text ────────────────────────────────────
+    def cell(text, style=body):
+        """Wrap text in Paragraph for proper font rendering in tables."""
+        return Paragraph(e(text) if isinstance(text, str) else str(text), style)
+
+    def cell_bold(text):
+        return Paragraph(e(text) if isinstance(text, str) else str(text), body_bold)
+
     st = []
     p = analysis.get("passport", {})
 
     # === HEADER ===
-    st.append(Paragraph("🧠 Цифровой Умник", title_s))
+    st.append(Paragraph("Цифровой Умник", title_s))
     st.append(Paragraph(f"Отчёт от {ds}", subtitle_s))
     st.append(hr())
 
     # === SUMMARY ===
     summary = p.get("summary", "")
     if summary:
-        st.append(Paragraph(f"<b>{e(summary)}</b>", ParagraphStyle("Sum", fontName=fb, fontSize=10, leading=14, textColor=DARK, spaceAfter=3*mm)))
+        sum_style = ParagraphStyle("Sum", fontName=fb, fontSize=10, leading=14, textColor=DARK, spaceAfter=3*mm)
+        st.append(Paragraph(e(summary), sum_style))
 
     # === PASSPORT TABLE ===
     passport_data = [
-        ["Дата", p.get("date", "—"), "Длительность", p.get("duration_estimate", "—")],
-        ["Участники", str(p.get("participants_count", "—")), "Формат", p.get("format", "—")],
-        ["Область", p.get("domain", "—"), "Тон", p.get("tone", "—")],
+        [cell_bold("Дата"), cell(p.get("date", "\u2013")), cell_bold("Длительность"), cell(p.get("duration_estimate", "\u2013"))],
+        [cell_bold("Участники"), cell(str(p.get("participants_count", "\u2013"))), cell_bold("Формат"), cell(p.get("format", "\u2013"))],
+        [cell_bold("Область"), cell(p.get("domain", "\u2013")), cell_bold("Тон"), cell(p.get("tone", "\u2013"))],
     ]
     pt = Table(passport_data, colWidths=[W*0.15, W*0.35, W*0.15, W*0.35])
     pt.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (0, -1), fb), ("FONTNAME", (2, 0), (2, -1), fb),
-        ("FONTNAME", (1, 0), (1, -1), fn), ("FONTNAME", (3, 0), (3, -1), fn),
         ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-        ("TEXTCOLOR", (0, 0), (0, -1), ACCENT), ("TEXTCOLOR", (2, 0), (2, -1), ACCENT),
         ("BACKGROUND", (0, 0), (-1, -1), LIGHT_BG),
         ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
         ("TOPPADDING", (0, 0), (-1, -1), 2*mm),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2*mm),
         ("LEFTPADDING", (0, 0), (-1, -1), 2*mm),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]))
     st.append(pt)
     st.append(Spacer(1, 3*mm))
@@ -386,17 +484,19 @@ def generate_pdf(analysis, lang_code="ru"):
             topic_items.append(Paragraph(f"<b>{i}. {e(tp.get('title', ''))}</b>", h2))
             if tp.get("description"):
                 topic_items.append(Paragraph(e(tp["description"]), body))
+            if tp.get("detailed_discussion"):
+                topic_items.append(Paragraph(e(tp["detailed_discussion"]), body))
             for kp in tp.get("key_points", []):
-                topic_items.append(Paragraph(f"• {e(kp)}", bullet))
+                topic_items.append(Paragraph(f"\u2022 {e(kp)}", bullet))
             for sp, pos in tp.get("positions", {}).items():
                 topic_items.append(Paragraph(f"<b>{e(sp)}:</b> {e(pos)}", bullet))
             if tp.get("outcome"):
                 topic_items.append(Paragraph(f"<b>Итог:</b> {e(tp['outcome'])}", body))
             for q in tp.get("quotes", [])[:2]:
-                topic_items.append(Paragraph(f"«{e(q)}»", body_italic))
+                topic_items.append(Paragraph(f"\u00ab{e(q)}\u00bb", body_italic))
             if tp.get("unresolved"):
                 for uq in tp["unresolved"]:
-                    topic_items.append(Paragraph(f"❓ {e(uq)}", bullet))
+                    topic_items.append(Paragraph(f"? {e(uq)}", bullet))
             st.append(KeepTogether(topic_items))
             st.append(Spacer(1, 2*mm))
 
@@ -404,21 +504,19 @@ def generate_pdf(analysis, lang_code="ru"):
     decs = analysis.get("decisions", [])
     if decs:
         st.append(section_header(2, "РЕШЕНИЯ"))
-        dec_rows = [["", "Решение", "Ответственный", "Статус"]]
+        dec_header = [cell_bold(""), cell_bold("Решение"), cell_bold("Ответственный"), cell_bold("Статус")]
+        dec_rows = [dec_header]
         for d in decs:
             status = d.get("status", "")
-            icon = {"accepted": "✅", "pending": "⏳", "question": "❓"}.get(status, "—")
+            icon = {"accepted": "\u2705", "pending": "\u23f3", "question": "?"}.get(status, "\u2013")
             dec_rows.append([
-                icon,
-                e(d.get("decision", "")),
-                e(d.get("responsible", "—")),
-                e(status),
+                cell(icon), cell(d.get("decision", "")),
+                cell(d.get("responsible", "\u2013")), cell(status),
             ])
         dt = Table(dec_rows, colWidths=[W*0.06, W*0.54, W*0.22, W*0.18])
         dt.setStyle(TableStyle([
-            ("FONTNAME", (0, 0), (-1, 0), fb), ("FONTNAME", (0, 1), (-1, -1), fn),
-            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-            ("BACKGROUND", (0, 0), (-1, 0), BLUE), ("TEXTCOLOR", (0, 0), (-1, 0), HexColor("#ffffff")),
+            ("BACKGROUND", (0, 0), (-1, 0), BLUE),
+            ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
             ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
             ("TOPPADDING", (0, 0), (-1, -1), 1.5*mm),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5*mm),
@@ -433,7 +531,7 @@ def generate_pdf(analysis, lang_code="ru"):
     if uqs:
         st.append(section_header(3, "ОТКРЫТЫЕ ВОПРОСЫ"))
         for uq in uqs:
-            st.append(Paragraph(f"❓ <b>{e(uq.get('question', ''))}</b>", body_bold))
+            st.append(Paragraph(f"<b>{e(uq.get('question', ''))}</b>", body_bold))
             if uq.get("reason"):
                 st.append(Paragraph(f"Причина: {e(uq['reason'])}", bullet))
         st.append(Spacer(1, 2*mm))
@@ -442,64 +540,57 @@ def generate_pdf(analysis, lang_code="ru"):
     dy = analysis.get("dynamics", {})
     if dy:
         st.append(section_header(4, "ДИНАМИКА ВСТРЕЧИ"))
-        # Participation balance
         balance = dy.get("participation_balance", {})
         if balance:
             st.append(Paragraph("<b>Баланс участия:</b>", body_bold))
             bal_items = [f"{e(sp)}: {e(pc)}" for sp, pc in balance.items()]
             st.append(Paragraph(" | ".join(bal_items), body))
 
-        # Interaction patterns
         ip = dy.get("interaction_patterns", {})
         if ip.get("interruptions"):
             st.append(Paragraph(f"<b>Перебивания:</b> {e(ip['interruptions'])}", body))
 
-        # Emotional map
         em = dy.get("emotional_map", {})
         for key, label, icon in [
-            ("enthusiasm_moments", "Энтузиазм", "🔥"),
-            ("tension_moments", "Напряжение", "⚡"),
-            ("turning_points", "Переломные моменты", "🔄"),
+            ("enthusiasm_moments", "Энтузиазм", ""),
+            ("tension_moments", "Напряжение", ""),
+            ("turning_points", "Переломные моменты", ""),
         ]:
             items = em.get(key, [])
             if items:
-                st.append(Paragraph(f"<b>{icon} {label}:</b>", body_bold))
+                st.append(Paragraph(f"<b>{label}:</b>", body_bold))
                 for it in items:
-                    st.append(Paragraph(f"• {e(it)}", bullet))
+                    st.append(Paragraph(f"\u2022 {e(it)}", bullet))
 
-        # Unspoken
         unspoken = dy.get("unspoken", [])
         if unspoken:
-            st.append(Paragraph("<b>🤫 Между строк:</b>", body_bold))
+            st.append(Paragraph("<b>Между строк:</b>", body_bold))
             for u in unspoken:
-                st.append(Paragraph(f"• {e(u)}", bullet))
+                st.append(Paragraph(f"\u2022 {e(u)}", bullet))
         st.append(Spacer(1, 2*mm))
 
     # === RECOMMENDATIONS ===
     rc = analysis.get("expert_recommendations", {})
     if rc:
         st.append(hr())
-        st.append(Paragraph("<b>🧠 РЕКОМЕНДАЦИИ ЦИФРОВОГО УМНИКА</b>", ParagraphStyle(
-            "RecH", fontName=fb, fontSize=12, textColor=DARK, spaceBefore=2*mm, spaceAfter=3*mm,
-        )))
+        rec_h = ParagraphStyle("RecH", fontName=fb, fontSize=12, textColor=DARK, spaceBefore=2*mm, spaceAfter=3*mm)
+        st.append(Paragraph("<b>РЕКОМЕНДАЦИИ ЦИФРОВОГО УМНИКА</b>", rec_h))
 
-        # Strengths
         for s2 in rc.get("strengths", []):
-            st.append(Paragraph(f"✅ {e(s2)}", body))
-
-        # Attention points
+            st.append(Paragraph(f"\u2705 {e(s2)}", body))
         for ap in rc.get("attention_points", []):
-            st.append(Paragraph(f"⚠️ {e(ap)}", body))
+            st.append(Paragraph(f"\u26a0 {e(ap)}", body))
 
-        # Recommendations
         recs = rc.get("recommendations", [])
         if recs:
             st.append(Spacer(1, 2*mm))
             for idx, r in enumerate(recs, 1):
                 priority = r.get("priority", "medium")
-                p_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(priority, "⚪")
+                p_label = {"high": "[!!!]", "medium": "[!!]", "low": "[!]"}.get(priority, "")
                 rec_items = []
-                rec_items.append(Paragraph(f"{p_icon} <b>Рекомендация {idx}: {e(r.get('what', ''))}</b>", body_bold))
+                rec_items.append(Paragraph(
+                    f"<b>{p_label} Рекомендация {idx}: {e(r.get('what', ''))}</b>", body_bold
+                ))
                 if r.get("why"):
                     rec_items.append(Paragraph(f"Почему: {e(r['why'])}", bullet))
                 if r.get("how"):
@@ -507,30 +598,33 @@ def generate_pdf(analysis, lang_code="ru"):
                 st.append(KeepTogether(rec_items))
                 st.append(Spacer(1, 1.5*mm))
 
-        # Next meeting questions
         nmq = rc.get("next_meeting_questions", [])
         if nmq:
             st.append(Spacer(1, 2*mm))
             st.append(Paragraph("<b>Вопросы для следующей встречи:</b>", body_bold))
             for q in nmq:
-                st.append(Paragraph(f"→ {e(q)}", bullet))
+                st.append(Paragraph(f"\u2192 {e(q)}", bullet))
 
-    # === FOOTER ===
     # === ACTION ITEMS ===
     ais = analysis.get("action_items", [])
     if ais:
         st.append(section_header(5, "ЗАДАЧИ"))
-        ai_rows = [["Задача", "Ответственный", "Срок"]]
+        ai_header = [cell_bold("Задача"), cell_bold("Ответственный"), cell_bold("Срок")]
+        ai_rows = [ai_header]
         for a in ais:
-            ai_rows.append([e(a.get("task", "")), e(a.get("responsible", "—")), e(a.get("deadline", "—"))])
+            ai_rows.append([
+                cell(a.get("task", "")), cell(a.get("responsible", "\u2013")),
+                cell(a.get("deadline", "\u2013")),
+            ])
         ait = Table(ai_rows, colWidths=[W*0.55, W*0.25, W*0.20])
         ait.setStyle(TableStyle([
-            ("FONTNAME", (0, 0), (-1, 0), fb), ("FONTNAME", (0, 1), (-1, -1), fn),
-            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-            ("BACKGROUND", (0, 0), (-1, 0), BLUE), ("TEXTCOLOR", (0, 0), (-1, 0), HexColor("#ffffff")),
+            ("BACKGROUND", (0, 0), (-1, 0), BLUE),
+            ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
             ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
-            ("TOPPADDING", (0, 0), (-1, -1), 1.5*mm), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5*mm),
-            ("LEFTPADDING", (0, 0), (-1, -1), 1.5*mm), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 1.5*mm),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5*mm),
+            ("LEFTPADDING", (0, 0), (-1, -1), 1.5*mm),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ]))
         st.append(ait)
         st.append(Spacer(1, 2*mm))
@@ -540,7 +634,7 @@ def generate_pdf(analysis, lang_code="ru"):
     if unc:
         st.append(section_header(6, "ТРЕБУЕТ УТОЧНЕНИЯ"))
         for u in unc:
-            st.append(Paragraph(f"⚠️ <b>«{e(u.get('text', ''))}»</b>", body_bold))
+            st.append(Paragraph(f"<b>\u00ab{e(u.get('text', ''))}\u00bb</b>", body_bold))
             if u.get("context"):
                 st.append(Paragraph(f"Контекст: {e(u['context'])}", bullet))
             if u.get("possible_meaning"):
@@ -552,7 +646,9 @@ def generate_pdf(analysis, lang_code="ru"):
     if ct:
         st.append(section_header(7, "ИСПРАВЛЕНИЯ РАСПОЗНАВАНИЯ"))
         for c in ct:
-            st.append(Paragraph(f"«{e(c.get('original', ''))}» → <b>{e(c.get('corrected', ''))}</b>", body))
+            st.append(Paragraph(
+                f"\u00ab{e(c.get('original', ''))}\u00bb \u2192 <b>{e(c.get('corrected', ''))}</b>", body
+            ))
         st.append(Spacer(1, 2*mm))
 
     # === GLOSSARY ===
@@ -560,15 +656,18 @@ def generate_pdf(analysis, lang_code="ru"):
     if gl:
         st.append(section_header(8, "ГЛОССАРИЙ"))
         for g in gl:
-            st.append(Paragraph(f"<b>{e(g.get('term', ''))}</b> — {e(g.get('definition', ''))}", body))
+            st.append(Paragraph(
+                f"<b>{e(g.get('term', ''))}</b> \u2013 {e(g.get('definition', ''))}", body
+            ))
         st.append(Spacer(1, 2*mm))
 
+    # === FOOTER ===
     st.append(Spacer(1, 5*mm))
     st.append(hr())
-    st.append(Paragraph(f"Цифровой Умник • {ds} • AI-анализ встречи", footer_s))
+    st.append(Paragraph(f"Цифровой Умник \u2022 {ds} \u2022 AI-анализ встречи", footer_s))
 
-    doc.build(st)
-    log.info(f"PDF: {fname}")
+    doc.build(st, onFirstPage=_header_footer, onLaterPages=_header_footer)
+    log.info(f"PDF: {fname} ({os.path.getsize(fpath)} bytes)")
     return fpath, fname
 
 
@@ -711,7 +810,7 @@ def generate_html(analysis, transcript_text=""):
     else:
         trh = "<p>Транскрипция недоступна</p>"
 
-    # Pre-build conditional sections (Python 3.11 compatibility - no nested f-strings)
+    # Pre-build conditional sections
     dy_balance = f"<h3>Баланс участия</h3>{bh}" if bh else ""
     dy_interact = f"<h3>Взаимодействие</h3>{iph}" if iph else ""
     dy_emotional = f"<h3>Эмоциональная карта</h3>{emh}" if emh else ""
