@@ -1,7 +1,13 @@
 """
-Digital Smarty v2.0 – Telegram Bot (Pyrogram)
+Digital Smarty v3.0 – Telegram Bot (Pyrogram)
 AI Meeting Analyzer with Deepgram + GPT-4o
 Supports files up to 2GB via Telegram MTProto
+
+v3.0 changes:
+- Progress bar via single message edit (instead of 4 separate messages)
+- Preview summary in chat before sending files
+- Transcript caching for retranslation (no re-transcription)
+- Timer showing processing duration
 """
 
 import os
@@ -10,6 +16,7 @@ import uuid
 import asyncio
 import logging
 import tempfile
+import time
 
 from pyrogram import Client, filters
 from pyrogram.types import (
@@ -81,18 +88,109 @@ MEDIA_EXTS = AUDIO_EXTS | VIDEO_EXTS
 
 def get_session(cid):
     if cid not in sessions:
-        sessions[cid] = {"files": [], "urls": [], "processing": False, "last_analysis": None, "last_transcript": None}
+        sessions[cid] = {
+            "files": [], "urls": [], "processing": False,
+            "last_analysis": None, "last_transcript": None,
+            "last_transcript_data": None,  # v3: cached transcript for retranslation
+        }
     return sessions[cid]
 
 
 def reset_session(cid):
-    # Keep last_analysis for re-translation
     old = sessions.get(cid, {})
     sessions[cid] = {
         "files": [], "urls": [], "processing": False,
         "last_analysis": old.get("last_analysis"),
         "last_transcript": old.get("last_transcript"),
+        "last_transcript_data": old.get("last_transcript_data"),  # v3: preserve cache
     }
+
+
+# ═══════════════════════════════════════════════════
+# PROGRESS BAR (v3)
+# ═══════════════════════════════════════════════════
+
+STEP_ICONS = {
+    "done": "✅",
+    "active": "⏳",
+    "pending": "⬜",
+}
+
+
+def build_progress_text(steps, current_step, n_files=1, extra_info=None):
+    """Build progress message with step indicators.
+
+    steps: list of (step_key, label)
+    current_step: index of active step (0-based)
+    extra_info: optional dict with extra info per step (e.g. speakers count)
+    """
+    lines = [f"🧠 **Обработка** ({n_files} источник(ов))\n"]
+    for i, (key, label) in enumerate(steps):
+        if i < current_step:
+            icon = STEP_ICONS["done"]
+            suffix = ""
+            if extra_info and key in extra_info:
+                suffix = f"  _{extra_info[key]}_"
+            lines.append(f"{icon} {label}{suffix}")
+        elif i == current_step:
+            lines.append(f"{STEP_ICONS['active']} {label}...")
+        else:
+            lines.append(f"{STEP_ICONS['pending']} {label}")
+    return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════
+# PREVIEW (v3)
+# ═══════════════════════════════════════════════════
+
+def build_preview(analysis):
+    """Build a short text preview of the analysis for chat."""
+    topic = analysis.get("meeting_topic_short", "")
+    passport = analysis.get("passport", {})
+
+    participants = passport.get("participants_count", "?")
+    duration = passport.get("duration_estimate", "?")
+    tone = passport.get("tone", "")
+    domain = passport.get("domain", "")
+
+    n_topics = len(analysis.get("topics", []))
+    n_decisions = len(analysis.get("decisions", []))
+    n_actions = len(analysis.get("action_items", []))
+
+    # Executive summary or passport summary
+    summary = analysis.get("executive_summary", "") or passport.get("summary", "")
+    if len(summary) > 200:
+        summary = summary[:197] + "..."
+
+    # Key decision (first one)
+    key_decision = ""
+    decisions = analysis.get("decisions", [])
+    if decisions:
+        d = decisions[0].get("decision", "")
+        if d:
+            key_decision = f"\n🎯 Ключевое решение: _{d}_"
+
+    # Main insight from conclusion
+    insight = ""
+    conclusion = analysis.get("conclusion", {})
+    if conclusion and conclusion.get("main_insight"):
+        insight = f"\n💡 _{conclusion['main_insight']}_"
+
+    lines = [
+        f"📋 **{topic}**",
+        f"👥 {participants} уч. | ⏱ {duration} | 🎭 {tone}",
+    ]
+    if domain:
+        lines.append(f"🏷 {domain}")
+    lines.append(f"🎯 {n_topics} тем | ✅ {n_decisions} решений | 📌 {n_actions} задач")
+    if summary:
+        lines.append(f"\n{summary}")
+    if key_decision:
+        lines.append(key_decision)
+    if insight:
+        lines.append(insight)
+
+    return "\n".join(lines)
 
 
 # ═══════════════════════════════════════════════════
@@ -109,46 +207,54 @@ async def download_tg_file(message_or_media, file_name):
 
 
 # ═══════════════════════════════════════════════════
-# PROCESSING
+# PROCESSING (v3: progress bar + preview + timer)
 # ═══════════════════════════════════════════════════
 
 async def process_meeting(client, chat_id, lang_code):
     s = get_session(chat_id)
+    start_time = time.time()
     try:
         s["processing"] = True
         n_files = len(s["files"]) + len(s["urls"])
-        await client.send_message(
+
+        STEPS = [
+            ("download", "Скачиваю и извлекаю аудио"),
+            ("transcribe", "Транскрибирую (Deepgram Nova-2)"),
+            ("analyze", "Анализирую как эксперт (GPT-4o)"),
+            ("generate", "Генерирую отчёты"),
+        ]
+
+        # Send initial progress message
+        progress_msg = await client.send_message(
             chat_id,
-            f"⏳ Принято! Запускаю анализ ({n_files} источник(ов))...\n\n"
-            "1️⃣ Скачиваю и извлекаю аудио\n"
-            "2️⃣ Транскрибирую (Deepgram Nova-2)\n"
-            "3️⃣ Анализирую как эксперт (GPT-4o)\n"
-            "4️⃣ Генерирую отчёты\n\n"
-            "Это может занять несколько минут. Сходи за кофе ☕\n"
-            "Я тут пока послушаю, о чём вы там совещались...",
+            build_progress_text(STEPS, 0, n_files) + "\n\n☕ Сходи за кофе, я тут пока послушаю...",
         )
 
         all_transcripts = []
+        extra_info = {}
 
-        # Process Telegram files (downloaded via MTProto)
+        # Step 0: Download
         for fi in s["files"]:
-            await client.send_message(chat_id, f"⬇️ Скачиваю: {fi['name']}...")
-            # fi["msg"] is the original message object – download from it
             path = await download_tg_file(fi["msg"], fi["name"])
-            await client.send_message(chat_id, "🎙 Транскрибирую...")
+            # Step 1: Transcribe
+            await progress_msg.edit_text(
+                build_progress_text(STEPS, 1, n_files, extra_info)
+                + "\n\n☕ Сходи за кофе, я тут пока послушаю...",
+            )
             t = await asyncio.to_thread(transcribe_file, path, DEEPGRAM_API_KEY)
             all_transcripts.append(t)
 
-        # Process URLs
         for url in s["urls"]:
-            await client.send_message(chat_id, "⬇️ Скачиваю по ссылке...")
             path = await asyncio.to_thread(download_from_url, url)
-            await client.send_message(chat_id, "🎙 Транскрибирую...")
+            await progress_msg.edit_text(
+                build_progress_text(STEPS, 1, n_files, extra_info)
+                + "\n\n☕ Сходи за кофе, я тут пока послушаю...",
+            )
             t = await asyncio.to_thread(transcribe_file, path, DEEPGRAM_API_KEY)
             all_transcripts.append(t)
 
         if not all_transcripts:
-            await client.send_message(chat_id, "😅 Не удалось обработать файлы. Попробуй ещё раз!")
+            await progress_msg.edit_text("😅 Не удалось обработать файлы. Попробуй ещё раз!")
             reset_session(chat_id)
             return
 
@@ -166,21 +272,48 @@ async def process_meeting(client, chat_id, lang_code):
                 "duration_seconds": sum(t["duration_seconds"] for t in all_transcripts),
             }
 
-        await client.send_message(chat_id, "🧠 Анализирую содержание...")
+        extra_info["transcribe"] = f"{merged['speakers_count']} спикеров, {format_ts(merged['duration_seconds'])}"
+
+        # v3: Cache transcript data for retranslation (no re-transcription!)
+        s["last_transcript_data"] = merged
+
+        # Step 2: Analyze
+        await progress_msg.edit_text(
+            build_progress_text(STEPS, 2, n_files, extra_info)
+            + "\n\n🧠 Это самая умная часть...",
+        )
         analysis = await asyncio.to_thread(analyze_meeting, merged, lang_code, OPENAI_API_KEY)
 
-        await client.send_message(chat_id, "📝 Генерирую отчёты...")
+        # Step 3: Generate
+        await progress_msg.edit_text(
+            build_progress_text(STEPS, 3, n_files, extra_info),
+        )
         pdf_path, pdf_fn = await asyncio.to_thread(generate_pdf, analysis, lang_code)
-        html_path, html_fn = await asyncio.to_thread(generate_html, analysis, merged["speaker_transcript"])
+        html_path, html_fn = await asyncio.to_thread(generate_html, analysis, merged["speaker_transcript"], lang_code)
         txt_path, txt_fn = await asyncio.to_thread(generate_txt, analysis, merged["speaker_transcript"])
 
         # Save for re-translation
         s["last_analysis"] = analysis
         s["last_transcript"] = merged["speaker_transcript"]
 
+        # Final progress: all done + timer
+        elapsed = time.time() - start_time
+        mins = int(elapsed // 60)
+        secs = int(elapsed % 60)
+        time_str = f"{mins} мин {secs} сек" if mins > 0 else f"{secs} сек"
+
+        await progress_msg.edit_text(
+            build_progress_text(STEPS, len(STEPS), n_files, extra_info)
+            + f"\n\n✅ **Готово за {time_str}**",
+        )
+
+        # v3: Preview before files
+        preview = build_preview(analysis)
+        await client.send_message(chat_id, preview)
+
+        # Send files
         await client.send_message(
             chat_id,
-            "✅ **Готово! Ваш Умник всё разложил по полочкам.**\n\n"
             "📄 PDF – структурированный отчёт (для начальства)\n"
             "🌐 HTML – интерактивный разбор (для души)\n"
             "📝 TXT – полная транскрипция (для параноиков)",
@@ -259,9 +392,11 @@ async def handle_analyze(client, message: Message):
 async def handle_retranslate(client, callback: CallbackQuery):
     chat_id = callback.message.chat.id
     s = get_session(chat_id)
-    lang_code = callback.data.replace("retranslate_", "")
+    lang_code_key = callback.data.replace("retranslate_", "")
 
-    if not s.get("last_transcript"):
+    # v3: Use cached transcript_data (no re-transcription!)
+    cached_td = s.get("last_transcript_data")
+    if not cached_td and not s.get("last_transcript"):
         await callback.answer("Нет данных для перевода. Скинь новую запись!")
         return
 
@@ -270,35 +405,66 @@ async def handle_retranslate(client, callback: CallbackQuery):
         return
 
     s["processing"] = True
-    lang_name = LANGUAGES.get(lang_code, ("", ""))[0]
-    await callback.message.edit_text(f"🌍 Генерирую отчёт на языке: **{lang_name}**\nЭто займёт пару минут...")
+    lang_name, lang_code = LANGUAGES.get(lang_code_key, ("", "ru"))
+    start_time = time.time()
+
+    await callback.message.edit_text(
+        f"🌍 Язык: **{lang_name}**\n\n"
+        f"✅ Транскрипция (из кеша)\n"
+        f"⏳ Анализирую на новом языке...",
+    )
     await callback.answer()
 
     try:
-        # Re-build transcript_data from saved data
-        transcript_data = {
-            "speakers_count": s["last_analysis"].get("passport", {}).get("participants_count", 2),
-            "detected_language": s["last_analysis"].get("passport", {}).get("tone", ""),
-            "duration_seconds": 0,
-            "speaker_transcript": s["last_transcript"],
-        }
+        # v3: Reuse cached transcript data instead of re-building from analysis
+        if cached_td:
+            transcript_data = cached_td
+        else:
+            # Fallback for old sessions without cache
+            transcript_data = {
+                "speakers_count": s["last_analysis"].get("passport", {}).get("participants_count", 2),
+                "detected_language": s["last_analysis"].get("passport", {}).get("tone", ""),
+                "duration_seconds": 0,
+                "speaker_transcript": s["last_transcript"],
+            }
 
-        await client.send_message(chat_id, "🧠 Переанализирую на новом языке...")
         analysis = await asyncio.to_thread(analyze_meeting, transcript_data, lang_code, OPENAI_API_KEY)
 
-        pdf_path, pdf_fn = await asyncio.to_thread(generate_pdf, analysis, lang_code)
-        html_path, html_fn = await asyncio.to_thread(generate_html, analysis, s["last_transcript"])
+        await callback.message.edit_text(
+            f"🌍 Язык: **{lang_name}**\n\n"
+            f"✅ Транскрипция (из кеша)\n"
+            f"✅ Анализ\n"
+            f"⏳ Генерирую отчёты...",
+        )
 
-        await client.send_document(chat_id, pdf_path, file_name=pdf_fn, caption=f"📄 PDF ({lang_name})")
-        await client.send_document(chat_id, html_path, file_name=html_fn, caption=f"🌐 HTML ({lang_name})")
+        pdf_path, pdf_fn = await asyncio.to_thread(generate_pdf, analysis, lang_code)
+        html_path, html_fn = await asyncio.to_thread(generate_html, analysis, s["last_transcript"], lang_code)
 
         # Save new analysis
         s["last_analysis"] = analysis
 
+        elapsed = time.time() - start_time
+        secs = int(elapsed)
+
+        await callback.message.edit_text(
+            f"🌍 Язык: **{lang_name}**\n\n"
+            f"✅ Транскрипция (из кеша)\n"
+            f"✅ Анализ\n"
+            f"✅ Отчёты\n\n"
+            f"✅ **Готово за {secs} сек**",
+        )
+
+        # v3: Preview for retranslation too
+        preview = build_preview(analysis)
+        await client.send_message(chat_id, preview)
+
+        await client.send_document(chat_id, pdf_path, file_name=pdf_fn, caption=f"📄 PDF ({lang_name})")
+        await client.send_document(chat_id, html_path, file_name=html_fn, caption=f"🌐 HTML ({lang_name})")
+
         # Offer more languages
         translate_buttons = []
         for code, (name, _) in LANGUAGES.items():
-            if code != lang_code:
+            if code != lang_code_key:
                 translate_buttons.append([InlineKeyboardButton(name, callback_data=f"retranslate_{code}")])
         await client.send_message(
             chat_id,
@@ -433,7 +599,7 @@ async def handle_text(client, message: Message):
 # ═══════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    log.info("🧠 Digital Smarty v2.0 starting (Pyrogram MTProto)...")
+    log.info("🧠 Digital Smarty v3.0 starting (Pyrogram MTProto)...")
     log.info(f"API_ID={API_ID}, TMP={TMP}")
     log.info("Flushed old updates. Starting polling...")
     app.run()
