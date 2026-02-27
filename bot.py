@@ -81,12 +81,18 @@ MEDIA_EXTS = AUDIO_EXTS | VIDEO_EXTS
 
 def get_session(cid):
     if cid not in sessions:
-        sessions[cid] = {"files": [], "urls": [], "processing": False}
+        sessions[cid] = {"files": [], "urls": [], "processing": False, "last_analysis": None, "last_transcript": None}
     return sessions[cid]
 
 
 def reset_session(cid):
-    sessions[cid] = {"files": [], "urls": [], "processing": False}
+    # Keep last_analysis for re-translation
+    old = sessions.get(cid, {})
+    sessions[cid] = {
+        "files": [], "urls": [], "processing": False,
+        "last_analysis": old.get("last_analysis"),
+        "last_transcript": old.get("last_transcript"),
+    }
 
 
 # ═══════════════════════════════════════════════════
@@ -168,18 +174,32 @@ async def process_meeting(client, chat_id, lang_code):
         html_path, html_fn = await asyncio.to_thread(generate_html, analysis, merged["speaker_transcript"])
         txt_path, txt_fn = await asyncio.to_thread(generate_txt, analysis, merged["speaker_transcript"])
 
+        # Save for re-translation
+        s["last_analysis"] = analysis
+        s["last_transcript"] = merged["speaker_transcript"]
+
         await client.send_message(
             chat_id,
             "✅ **Готово! Ваш Умник всё разложил по полочкам.**\n\n"
             "📄 PDF – структурированный отчёт (для начальства)\n"
             "🌐 HTML – интерактивный разбор (для души)\n"
-            "📝 TXT – полная транскрипция (для параноиков)\n\n"
-            "Есть ещё записи? Скидывай, я весь внимание 💪",
+            "📝 TXT – полная транскрипция (для параноиков)",
         )
 
         await client.send_document(chat_id, pdf_path, file_name=pdf_fn, caption="📄 PDF-отчёт")
         await client.send_document(chat_id, html_path, file_name=html_fn, caption="🌐 Интерактивный HTML")
         await client.send_document(chat_id, txt_path, file_name=txt_fn, caption="📝 Транскрипция")
+
+        # Offer translation
+        translate_buttons = []
+        for code, (name, _) in LANGUAGES.items():
+            if code != lang_code:
+                translate_buttons.append([InlineKeyboardButton(name, callback_data=f"retranslate_{code}")])
+        await client.send_message(
+            chat_id,
+            "🌍 **Хочешь этот же отчёт на другом языке?**\nВыбери язык или скинь новую запись:",
+            reply_markup=InlineKeyboardMarkup(translate_buttons),
+        )
 
         for p in [pdf_path, html_path, txt_path]:
             if os.path.exists(p):
@@ -233,6 +253,68 @@ async def handle_analyze(client, message: Message):
         "🌍 На каком языке написать отчёт?",
         reply_markup=InlineKeyboardMarkup(buttons),
     )
+
+
+@app.on_callback_query(filters.regex(r"^retranslate_"))
+async def handle_retranslate(client, callback: CallbackQuery):
+    chat_id = callback.message.chat.id
+    s = get_session(chat_id)
+    lang_code = callback.data.replace("retranslate_", "")
+
+    if not s.get("last_transcript"):
+        await callback.answer("Нет данных для перевода. Скинь новую запись!")
+        return
+
+    if s["processing"]:
+        await callback.answer("Уже обрабатываю!")
+        return
+
+    s["processing"] = True
+    lang_name = LANGUAGES.get(lang_code, ("", ""))[0]
+    await callback.message.edit_text(f"🌍 Генерирую отчёт на языке: **{lang_name}**\nЭто займёт пару минут...")
+    await callback.answer()
+
+    try:
+        # Re-build transcript_data from saved data
+        transcript_data = {
+            "speakers_count": s["last_analysis"].get("passport", {}).get("participants_count", 2),
+            "detected_language": s["last_analysis"].get("passport", {}).get("tone", ""),
+            "duration_seconds": 0,
+            "speaker_transcript": s["last_transcript"],
+        }
+
+        await client.send_message(chat_id, "🧠 Переанализирую на новом языке...")
+        analysis = await asyncio.to_thread(analyze_meeting, transcript_data, lang_code, OPENAI_API_KEY)
+
+        pdf_path, pdf_fn = await asyncio.to_thread(generate_pdf, analysis)
+        html_path, html_fn = await asyncio.to_thread(generate_html, analysis, s["last_transcript"])
+
+        await client.send_document(chat_id, pdf_path, file_name=pdf_fn, caption=f"📄 PDF ({lang_name})")
+        await client.send_document(chat_id, html_path, file_name=html_fn, caption=f"🌐 HTML ({lang_name})")
+
+        # Save new analysis
+        s["last_analysis"] = analysis
+
+        # Offer more languages
+        translate_buttons = []
+        for code, (name, _) in LANGUAGES.items():
+            if code != lang_code:
+                translate_buttons.append([InlineKeyboardButton(name, callback_data=f"retranslate_{code}")])
+        await client.send_message(
+            chat_id,
+            "✅ Готово! Ещё язык или скинь новую запись 💪",
+            reply_markup=InlineKeyboardMarkup(translate_buttons),
+        )
+
+        for p in [pdf_path, html_path]:
+            if os.path.exists(p):
+                os.remove(p)
+
+    except Exception as ex:
+        log.error(f"Retranslate error: {ex}", exc_info=True)
+        await client.send_message(chat_id, f"😅 Ошибка перевода: {str(ex)[:300]}")
+    finally:
+        s["processing"] = False
 
 
 @app.on_callback_query(filters.regex(r"^start_analyze$"))

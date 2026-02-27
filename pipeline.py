@@ -285,21 +285,6 @@ def generate_pdf(analysis):
     except Exception:
         fn, fb, fi = "Helvetica", "Helvetica-Bold", "Helvetica-Oblique"
 
-    # Try CJK font for Chinese support
-    try:
-        noto_paths = [
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
-            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-        ]
-        for np in noto_paths:
-            if os.path.exists(np):
-                pdfmetrics.registerFont(TTFont("Noto", np, subfontIndex=0))
-                fn, fb, fi = "Noto", "Noto", "Noto"
-                break
-    except Exception:
-        pass
-
     # Colors
     DARK = HexColor("#1a1a2e")
     BLUE = HexColor("#16213e")
