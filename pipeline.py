@@ -766,7 +766,11 @@ def generate_pdf(analysis, lang_code="ru"):
             for kp in tp.get("key_points", []):
                 topic_items.append(Paragraph(f"\u2022 {e(kp)}", bullet))
             for sp, pos in tp.get("positions", {}).items():
-                topic_items.append(Paragraph(f"<b>{e(sp)}:</b> {e(pos)}", bullet))
+                if isinstance(pos, dict):
+                    stance = pos.get('stance', '')
+                    topic_items.append(Paragraph(f"<b>{e(sp)}:</b> {e(stance)}", bullet))
+                else:
+                    topic_items.append(Paragraph(f"<b>{e(sp)}:</b> {e(pos)}", bullet))
             if tp.get("outcome"):
                 topic_items.append(Paragraph(f"<b>{L['outcome']}:</b> {e(tp['outcome'])}", body))
             for q in tp.get("quotes", [])[:2]:
