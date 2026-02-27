@@ -249,7 +249,7 @@ def analyze_meeting(transcript_data, language_code, openai_key):
     resp = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": msg}],
-        temperature=0.4, max_tokens=32000,
+        temperature=0.4, max_tokens=16384,
         response_format={"type": "json_object"},
     )
     return json.loads(resp.choices[0].message.content)
