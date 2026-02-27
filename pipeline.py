@@ -383,6 +383,35 @@ def generate_pdf(analysis, lang_code="ru"):
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
 
+    # ── Detect actual language from content ──────────────────────
+    def _detect_content_lang(analysis_data):
+        """Detect language from analysis content for 'original' mode."""
+        sample = json.dumps(analysis_data, ensure_ascii=False)[:2000]
+        # Chinese: check for CJK Unified Ideographs
+        cjk_count = sum(1 for ch in sample if '\u4e00' <= ch <= '\u9fff')
+        if cjk_count > 10:
+            return "zh"
+        # Cyrillic
+        cyr_count = sum(1 for ch in sample if '\u0400' <= ch <= '\u04ff')
+        lat_count = sum(1 for ch in sample if 'a' <= ch.lower() <= 'z')
+        if cyr_count > lat_count:
+            # Kazakh-specific chars
+            kz_chars = set('ӘәҒғҚқҢңӨөҰұҮүІі')
+            if any(ch in kz_chars for ch in sample):
+                return "kk"
+            return "ru"
+        # Spanish indicators
+        es_chars = set('ñáéíóúüÑÁÉÍÓÚÜ¿¡')
+        if any(ch in es_chars for ch in sample):
+            return "es"
+        return "en"
+
+    def _has_chinese(analysis_data):
+        """Check if analysis content contains Chinese characters."""
+        sample = json.dumps(analysis_data, ensure_ascii=False)[:3000]
+        cjk_count = sum(1 for ch in sample if '\u4e00' <= ch <= '\u9fff')
+        return cjk_count > 5
+
     # ── i18n: all UI strings by language ─────────────────────────
     I18N = {
         "ru": {
@@ -593,18 +622,26 @@ def generate_pdf(analysis, lang_code="ru"):
     }
 
     # Select language, fallback to Russian
-    L = I18N.get(lang_code, I18N.get("ru"))
+    # For "original" – detect from content
+    effective_lang = lang_code
+    if lang_code == "original":
+        effective_lang = _detect_content_lang(analysis)
+        log.info(f"Language 'original' detected as: {effective_lang}")
+
+    L = I18N.get(effective_lang, I18N.get("ru"))
 
     # Use registered fonts
     fn = _PDF_FONT_NORMAL
     fb = _PDF_FONT_BOLD
     fi = _PDF_FONT_ITALIC
 
-    # Chinese override: use bundled NotoSansSC
-    if lang_code == "zh":
+    # Chinese font: activate if lang is Chinese OR if content contains Chinese
+    needs_chinese = (effective_lang == "zh") or _has_chinese(analysis)
+    if needs_chinese:
         zh_font = _register_chinese_font()
         if zh_font:
             fn, fb, fi = zh_font, zh_font, zh_font
+            log.info("Using NotoSansSC for Chinese content")
 
     # Colors
     DARK = HexColor("#1a1a2e")
