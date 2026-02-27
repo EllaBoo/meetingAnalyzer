@@ -191,38 +191,44 @@ def transcribe_file(file_path, deepgram_key):
 SYSTEM_PROMPT = """Ты – Цифровой Умник, AI-аналитик встреч с характером.
 
 ТВОЙ ХАРАКТЕР:
-- Тёплый, но саркастичный. Ты как тот самый умный друг, который искренне переживает за проект, но не может удержаться от колкого наблюдения.
-- Юмористичный, но не клоун. Шутки уместны в описаниях и наблюдениях, но НЕ в рекомендациях.
-- Ироничный наблюдатель: замечаешь, когда разговор ходит по кругу, когда кто-то "согласился" но явно не согласен, когда обсуждение ушло в дебри.
-- При этом ты ЭКСПЕРТ. Когда дело доходит до рекомендаций – ты абсолютно серьёзен, конкретен и профессионален.
+- Тёплый, но саркастичный. Как умный друг, который искренне переживает за проект, но не удержится от колкого наблюдения.
+- Юмористичный, но не клоун. Шутки уместны в описаниях, но НЕ в рекомендациях.
+- Ироничный наблюдатель: замечаешь, когда разговор ходит по кругу, когда кто-то "согласился" но явно не согласен.
+- При этом ты ЭКСПЕРТ. В рекомендациях – абсолютно серьёзен, конкретен, профессионален.
 
 СТИЛЬ ТЕКСТА:
-- В "description" тем – ПОДРОБНО раскрывай суть обсуждения: контекст, почему тема возникла, как развивалась дискуссия. Можно с иронией.
-- В "detailed_discussion" – передай ход обсуждения: кто что предлагал, какие аргументы приводил, к чему пришли. Это самая подробная часть.
-- В "key_points" – чётко и по делу, но живым языком
-- В "emotional_map" и "unspoken" – здесь твой сарказм уместен
-- В "expert_recommendations" – СТРОГО профессионально. Ты здесь эксперт с многолетним опытом в обсуждаемой области. Каждая рекомендация конкретна, полезна, реализуема.
+- "description" тем – ПОДРОБНО: контекст, почему возникла, как развивалась. Можно с иронией.
+- "detailed_discussion" – самая подробная часть: кто что предлагал, аргументы, к чему пришли. 5-10 предложений МИНИМУМ.
+- "key_points" – чётко и по делу, живым языком
+- "emotional_map", "unspoken" – здесь сарказм уместен
+- "expert_recommendations" – СТРОГО профессионально. Эксперт с многолетним опытом.
+- "executive_summary" – 3-5 ёмких предложений: суть + критические шаги + главная рекомендация.
+- "conclusion" – серьёзный итог: инсайт, рекомендация, прогноз.
+
+ПОДРОБНОСТЬ:
+- Каждая тема – полноценный анализ, не 1-2 предложения.
+- Позиции участников – подробные, с аргументами.
+- Рекомендации – конкретные, с инструментами и примерами из практики.
+- Риски – реальные, с мерами предотвращения.
 
 ПРИНЦИПЫ:
-1. ТОЛЬКО факты из аудио. Не выдумывай. Если информации не было – НЕ ДОДУМЫВАЙ.
-2. Интерпретации маркируй «возможно», «судя по контексту», «создаётся впечатление».
-3. Рекомендации = отдельная глава. Каждая содержит ЧТО, ПОЧЕМУ, КАК.
-4. Адаптируйся к области обсуждения – стань экспертом именно в этой теме.
-5. Используй яркие цитаты из беседы.
-6. «Собеседник 1, 2, 3...» если имена не прозвучали. Если имена звучали – используй их.
-7. Оценивай идеи, не людей.
-8. Рекомендации должны быть ДЕЙСТВЕННЫМИ.
-9. ИСПРАВЛЯЙ ОШИБКИ РАСПОЗНАВАНИЯ: если термин распознан некорректно (например «диджитал маркертинг» вместо «digital marketing»), используй правильный вариант. В поле "corrected_terms" укажи что было распознано и что имелось в виду.
-10. Если ты НЕ УВЕРЕН в интерпретации слова, фразы или контекста – добавь в "uncertainties". Лучше признать неуверенность, чем выдумать.
-11. Создай "glossary" – словарь ключевых терминов/понятий из обсуждаемой области для неподготовленного читателя.
+1. ТОЛЬКО факты из аудио. Не выдумывай. Нет информации – НЕ ДОДУМЫВАЙ.
+2. Интерпретации маркируй «возможно», «судя по контексту».
+3. Адаптируйся к области обсуждения – стань экспертом именно в этой теме.
+4. Используй яркие цитаты из беседы.
+5. «Собеседник 1, 2, 3...» если имена не прозвучали. Если звучали – используй их.
+6. Оценивай идеи, не людей.
+7. ИСПРАВЛЯЙ ОШИБКИ РАСПОЗНАВАНИЯ в "corrected_terms".
+8. Если НЕ УВЕРЕН – добавь в "uncertainties". Лучше признать, чем выдумать.
+9. "glossary" – словарь ключевых терминов для неподготовленного читателя.
 
-РАЗДЕЛЕНИЕ РЕШЕНИЙ И ЗАДАЧ:
-- "decisions" – это ТОЛЬКО то, о чём ДОГОВОРИЛИСЬ участники. Конкретные решения, принятые на встрече.
-- "action_items" – конкретные задачи: кто, что, когда.
-- НЕ путай предложения с решениями. Если кто-то ПРЕДЛОЖИЛ, но не приняли – это НЕ решение.
+РЕШЕНИЯ vs ЗАДАЧИ:
+- "decisions" – ТОЛЬКО то, о чём ДОГОВОРИЛИСЬ. Конкретные решения.
+- "action_items" – задачи: кто, что, когда.
+- Предложения ≠ решения.
 
 Ответ СТРОГО в JSON:
-{"meeting_topic_short":"3-5 слов","passport":{"date":"...","duration_estimate":"...","participants_count":0,"participants":["Собеседник 1"],"format":"...","domain":"...","tone":"...","summary":"..."},"topics":[{"title":"...","description":"подробное описание, 3-5 предложений","detailed_discussion":"подробный ход обсуждения: кто что говорил, какие аргументы, как развивалась дискуссия, 5-10 предложений","raised_by":"...","key_points":["..."],"positions":{"Собеседник 1":"подробная позиция с аргументами"},"outcome":"...","unresolved":["..."],"quotes":["..."]}],"decisions":[{"decision":"только то что реально решили","responsible":"...","status":"accepted|pending"}],"action_items":[{"task":"...","responsible":"...","deadline":"..."}],"unresolved_questions":[{"question":"...","reason":"..."}],"dynamics":{"participation_balance":{"Собеседник 1":"45%"},"interaction_patterns":{"interruptions":"...","question_askers":["..."],"topic_initiators":["..."],"challengers":["..."]},"emotional_map":{"enthusiasm_moments":["..."],"tension_moments":["..."],"uncertainty_moments":["..."],"turning_points":["..."]},"unspoken":["..."]},"expert_recommendations":{"strengths":["..."],"attention_points":["..."],"recommendations":[{"what":"...","why":"...","how":"...","priority":"high|medium|low"}],"next_meeting_questions":["..."]},"uncertainties":[{"text":"фраза или термин","context":"где прозвучало","possible_meaning":"возможная интерпретация"}],"corrected_terms":[{"original":"как распознано","corrected":"что имелось в виду","context":"в каком контексте"}],"glossary":[{"term":"...","definition":"пояснение для неподготовленного читателя"}]}"""
+{"meeting_topic_short":"3-5 слов","executive_summary":"3-5 предложений: суть встречи, критические шаги, основная рекомендация","passport":{"date":"...","duration_estimate":"...","participants_count":0,"participants":["Собеседник 1"],"format":"...","domain":"...","tone":"...","complexity":"низкий|средний|высокий с пояснением","summary":"1-2 предложения"},"meeting_goals":{"explicit":["озвученные цели"],"implicit":["скрытые цели между строк"],"recommendation":"как лучше формулировать цели для таких встреч"},"topics":[{"title":"...","description":"подробное описание, 3-5 предложений","detailed_discussion":"подробный ход: кто что говорил, аргументы, как развивалась дискуссия, 5-10 предложений МИНИМУМ","raised_by":"...","key_points":["..."],"positions":{"Собеседник 1":{"stance":"позиция и аргументы подробно","true_interests":"истинные интересы","strengths":"сильные стороны позиции","weaknesses":"слабые стороны"}},"agreement_points":["в чём стороны согласны"],"disagreement_points":["в чём расходятся"],"outcome":"...","unresolved":["..."],"quotes":["..."],"expert_tip":"рекомендация Цифрового Умника по этой теме"}],"decisions":[{"decision":"что решили","responsible":"...","status":"accepted|pending","context":"почему так решили"}],"action_items":[{"task":"...","responsible":"...","deadline":"..."}],"unresolved_questions":[{"question":"...","reason":"почему не решили","impact":"что будет если не решить"}],"dynamics":{"participation_balance":{"Собеседник 1":"45%"},"interaction_patterns":{"interruptions":"...","question_askers":["..."],"topic_initiators":["..."],"challengers":["..."]},"emotional_map":{"enthusiasm_moments":["..."],"tension_moments":["..."],"uncertainty_moments":["..."],"turning_points":["..."]},"unspoken":["..."],"hidden_dynamics":"уровень доверия, эмоциональный фон, борьба за лидерство"},"swot":{"strengths":["сильные стороны обсуждаемого вопроса"],"weaknesses":["слабые стороны"],"opportunities":["возможности"],"threats":["угрозы"]},"expert_recommendations":{"strengths":["что хорошо"],"attention_points":["на что обратить внимание"],"substantive":[{"what":"рекомендация по существу","why":"почему важно","how":"как реализовать","priority":"high|medium|low"}],"process":[{"what":"рекомендация по процессу","how":"конкретные шаги"}],"tools_and_methods":["инструменты и методологии"],"benchmarks":["бенчмарки и примеры из практики"],"next_meeting_questions":["..."]},"risks":[{"risk":"описание","probability":"высокая|средняя|низкая","impact":"высокое|среднее|низкое","mitigation":"как предотвратить"}],"action_plan":{"urgent":["1-7 дней"],"medium_term":["1-4 недели"],"long_term":["1-3 месяца"],"kpi":["метрики успеха"]},"conclusion":{"main_insight":"главный инсайт – одно предложение","key_recommendation":"ключевая рекомендация","forecast":"прогноз"},"uncertainties":[{"text":"фраза","context":"где прозвучало","possible_meaning":"возможная интерпретация"}],"corrected_terms":[{"original":"как распознано","corrected":"что имелось в виду","context":"контекст"}],"glossary":[{"term":"...","definition":"пояснение"}]}"""
 
 
 def analyze_meeting(transcript_data, language_code, openai_key):
@@ -243,7 +249,7 @@ def analyze_meeting(transcript_data, language_code, openai_key):
     resp = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": msg}],
-        temperature=0.4, max_tokens=16000,
+        temperature=0.4, max_tokens=32000,
         response_format={"type": "json_object"},
     )
     return json.loads(resp.choices[0].message.content)
@@ -849,12 +855,14 @@ def generate_pdf(analysis, lang_code="ru"):
 
         for s2 in rc.get("strengths", []):
             st.append(Paragraph(f"\u2705 {e(s2)}", body))
-        for ap in rc.get("attention_points", []):
-            st.append(Paragraph(f"\u26a0 {e(ap)}", body))
+        for ap2 in rc.get("attention_points", []):
+            st.append(Paragraph(f"\u26a0 {e(ap2)}", body))
 
-        recs = rc.get("recommendations", [])
+        # v3: substantive recommendations (fallback to v2 "recommendations" key)
+        recs = rc.get("substantive", rc.get("recommendations", []))
         if recs:
             st.append(Spacer(1, 2*mm))
+            st.append(Paragraph(f"<b>{L.get('by_substance', 'По существу вопроса')}:</b>", body_bold))
             for idx, r in enumerate(recs, 1):
                 priority = r.get("priority", "medium")
                 p_label = {"high": "[!!!]", "medium": "[!!]", "low": "[!]"}.get(priority, "")
@@ -868,6 +876,32 @@ def generate_pdf(analysis, lang_code="ru"):
                     rec_items.append(Paragraph(f"{L['how']}: {e(r['how'])}", bullet))
                 st.append(KeepTogether(rec_items))
                 st.append(Spacer(1, 1.5*mm))
+
+        # v3: process recommendations
+        proc_recs = rc.get("process", [])
+        if proc_recs:
+            st.append(Spacer(1, 2*mm))
+            st.append(Paragraph(f"<b>{L.get('by_process', 'По процессу')}:</b>", body_bold))
+            for idx, r in enumerate(proc_recs, 1):
+                st.append(Paragraph(f"{idx}. <b>{e(r.get('what', ''))}</b>", body_bold))
+                if r.get("how"):
+                    st.append(Paragraph(f"   {e(r['how'])}", bullet))
+
+        # v3: tools and methods
+        tools = rc.get("tools_and_methods", [])
+        if tools:
+            st.append(Spacer(1, 2*mm))
+            st.append(Paragraph(f"<b>{L.get('tools_methods', 'Инструменты и методологии')}:</b>", body_bold))
+            for t2 in tools:
+                st.append(Paragraph(f"\u2022 {e(t2)}", bullet))
+
+        # v3: benchmarks
+        bench = rc.get("benchmarks", [])
+        if bench:
+            st.append(Spacer(1, 2*mm))
+            st.append(Paragraph(f"<b>{L.get('benchmarks', 'Бенчмарки и примеры')}:</b>", body_bold))
+            for b in bench:
+                st.append(Paragraph(f"\u2022 {e(b)}", bullet))
 
         nmq = rc.get("next_meeting_questions", [])
         if nmq:
@@ -899,6 +933,140 @@ def generate_pdf(analysis, lang_code="ru"):
         ]))
         st.append(ait)
         st.append(Spacer(1, 2*mm))
+
+    # ╔══════════════════════════════════════════════════╗
+    # ║  v3 NEW SECTIONS                                 ║
+    # ╚══════════════════════════════════════════════════╝
+
+    # === EXECUTIVE SUMMARY (v3) ===
+    exec_sum = analysis.get("executive_summary", "")
+    if exec_sum:
+        st.insert(3, Spacer(1, 2*mm))  # after header area
+        st.insert(4, Paragraph(f"<b>EXECUTIVE SUMMARY</b>", body_bold))
+        st.insert(5, Paragraph(e(exec_sum), body))
+        st.insert(6, Spacer(1, 3*mm))
+
+    # === MEETING GOALS (v3) ===
+    goals = analysis.get("meeting_goals", {})
+    if goals:
+        st.append(section_header(5.1, L.get("meeting_goals", "ЦЕЛИ ВСТРЕЧИ")))
+        expl = goals.get("explicit", [])
+        if expl:
+            st.append(Paragraph(f"<b>{L.get('explicit_goals', 'Явные цели')}:</b>", body_bold))
+            for g in expl:
+                st.append(Paragraph(f"\u2022 {e(g)}", bullet))
+        impl = goals.get("implicit", [])
+        if impl:
+            st.append(Paragraph(f"<b>{L.get('implicit_goals', 'Скрытые цели')}:</b>", body_bold))
+            for g in impl:
+                st.append(Paragraph(f"\u2022 {e(g)}", bullet))
+        rec = goals.get("recommendation", "")
+        if rec:
+            st.append(Spacer(1, 1*mm))
+            st.append(Paragraph(
+                f"[{L.get('recommendation', 'РЕКОМЕНДАЦИЯ')}] {e(rec)}", body_bold
+            ))
+        st.append(Spacer(1, 2*mm))
+
+    # === SWOT (v3) ===
+    swot = analysis.get("swot", {})
+    if swot and any(swot.get(k) for k in ["strengths", "weaknesses", "opportunities", "threats"]):
+        st.append(section_header(5.2, L.get("swot_title", "СТРАТЕГИЧЕСКИЙ SWOT-АНАЛИЗ")))
+        swot_data = [
+            [cell(f"<b>{L.get('swot_s', 'Сильные стороны')}</b>", body_bold),
+             cell(f"<b>{L.get('swot_w', 'Слабые стороны')}</b>", body_bold)],
+            [cell("<br/>".join(f"\u2022 {e(x)}" for x in swot.get("strengths", [])), body),
+             cell("<br/>".join(f"\u2022 {e(x)}" for x in swot.get("weaknesses", [])), body)],
+            [cell(f"<b>{L.get('swot_o', 'Возможности')}</b>", body_bold),
+             cell(f"<b>{L.get('swot_t', 'Угрозы')}</b>", body_bold)],
+            [cell("<br/>".join(f"\u2022 {e(x)}" for x in swot.get("opportunities", [])), body),
+             cell("<br/>".join(f"\u2022 {e(x)}" for x in swot.get("threats", [])), body)],
+        ]
+        sw_t = Table(swot_data, colWidths=[pw/2]*2)
+        sw_t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (0, 0), HexColor("#f0fdf4")),
+            ("BACKGROUND", (1, 0), (1, 0), HexColor("#fef2f2")),
+            ("BACKGROUND", (0, 2), (0, 2), HexColor("#eff6ff")),
+            ("BACKGROUND", (1, 2), (1, 2), HexColor("#fffbeb")),
+            ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+            ("TOPPADDING", (0, 0), (-1, -1), 2*mm),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2*mm),
+            ("LEFTPADDING", (0, 0), (-1, -1), 2*mm),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        st.append(sw_t)
+        st.append(Spacer(1, 3*mm))
+
+    # === RISKS TABLE (v3) ===
+    risks = analysis.get("risks", [])
+    if risks:
+        st.append(section_header(5.3, L.get("risks_title", "РИСКИ И КАК ИХ ИЗБЕЖАТЬ")))
+        risk_header = [
+            cell(f"<b>{L.get('risk', 'Риск')}</b>", body_bold),
+            cell(f"<b>{L.get('probability', 'Вероятность')}</b>", body_bold),
+            cell(f"<b>{L.get('impact_label', 'Влияние')}</b>", body_bold),
+            cell(f"<b>{L.get('mitigation', 'Как предотвратить')}</b>", body_bold),
+        ]
+        risk_rows = [risk_header]
+        for r in risks:
+            risk_rows.append([
+                cell(e(r.get("risk", "")), body),
+                cell(e(r.get("probability", "")), body),
+                cell(e(r.get("impact", "")), body),
+                cell(e(r.get("mitigation", "")), body),
+            ])
+        rt = Table(risk_rows, colWidths=[pw*0.3, pw*0.15, pw*0.15, pw*0.4])
+        rt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
+            ("TEXTCOLOR", (0, 0), (-1, 0), HexColor("#ffffff")),
+            ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+            ("TOPPADDING", (0, 0), (-1, -1), 1.5*mm),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5*mm),
+            ("LEFTPADDING", (0, 0), (-1, -1), 1.5*mm),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        st.append(rt)
+        st.append(Spacer(1, 3*mm))
+
+    # === ACTION PLAN (v3) ===
+    ap = analysis.get("action_plan", {})
+    if ap and any(ap.get(k) for k in ["urgent", "medium_term", "long_term", "kpi"]):
+        st.append(section_header(5.4, L.get("action_plan_title", "ПЛАН ДАЛЬНЕЙШИХ ДЕЙСТВИЙ")))
+        for key, label in [
+            ("urgent", L.get("urgent", "Срочно (1-7 дней)")),
+            ("medium_term", L.get("medium_term", "Среднесрок (1-4 недели)")),
+            ("long_term", L.get("long_term", "Долгосрок (1-3 месяца)")),
+        ]:
+            items = ap.get(key, [])
+            if items:
+                st.append(Paragraph(f"<b>{label}:</b>", body_bold))
+                for idx, item in enumerate(items, 1):
+                    st.append(Paragraph(f"{idx}. {e(item)}", bullet))
+        kpi = ap.get("kpi", [])
+        if kpi:
+            st.append(Spacer(1, 1*mm))
+            st.append(Paragraph(f"<b>{L.get('kpi_label', 'KPI и метрики успеха')}:</b>", body_bold))
+            for k in kpi:
+                st.append(Paragraph(f"\u2022 {e(k)}", bullet))
+        st.append(Spacer(1, 3*mm))
+
+    # === CONCLUSION (v3) ===
+    conclusion = analysis.get("conclusion", {})
+    if conclusion and any(conclusion.get(k) for k in ["main_insight", "key_recommendation", "forecast"]):
+        st.append(section_header(5.5, L.get("conclusion_title", "ЗАКЛЮЧЕНИЕ ЦИФРОВОГО УМНИКА")))
+        if conclusion.get("main_insight"):
+            st.append(Paragraph(
+                f"<b>{L.get('main_insight', 'Главный инсайт')}:</b> {e(conclusion['main_insight'])}", body
+            ))
+        if conclusion.get("key_recommendation"):
+            st.append(Paragraph(
+                f"<b>{L.get('key_rec', 'Ключевая рекомендация')}:</b> {e(conclusion['key_recommendation'])}", body
+            ))
+        if conclusion.get("forecast"):
+            st.append(Paragraph(
+                f"<b>{L.get('forecast', 'Прогноз')}:</b> {e(conclusion['forecast'])}", body
+            ))
+        st.append(Spacer(1, 3*mm))
 
     # === UNCERTAINTIES ===
     unc = analysis.get("uncertainties", [])
@@ -942,7 +1110,7 @@ def generate_pdf(analysis, lang_code="ru"):
     return fpath, fname
 
 
-def generate_html(analysis, transcript_text=""):
+def generate_html(analysis, transcript_text="", lang_code="ru"):
     slug = make_slug(analysis)
     ds = datetime.now().strftime("%Y-%m-%d")
     fname = f"{slug}_{ds}_interactive.html"
