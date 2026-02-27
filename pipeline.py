@@ -595,17 +595,29 @@ def generate_html(analysis, transcript_text=""):
         quotes = "".join(f'<blockquote>«{e(q)}»</blockquote>' for q in t.get("quotes", []))
         unr = "".join(f'<li class="unr">❓ {e(u)}</li>' for u in t.get("unresolved", []))
         detail = e(t.get("detailed_discussion", ""))
+
+        detail_html = f'<div class="detail-block"><div class="detail-label">💬 Ход обсуждения</div><p>{detail}</p></div>' if detail else ""
+        kps_html = f'<div class="detail-block"><div class="detail-label">📌 Ключевые тезисы</div><ul>{kps}</ul></div>' if kps else ""
+        pos_html = f'<div class="detail-block"><div class="detail-label">👥 Позиции участников</div>{pos}</div>' if pos else ""
+        outcome_val = e(t.get("outcome", ""))
+        outcome_html = f'<div class="detail-block"><div class="detail-label">🎯 Итог</div><p>{outcome_val}</p></div>' if t.get("outcome") else ""
+        quotes_html = f'<div class="detail-block"><div class="detail-label">💬 Цитаты</div>{quotes}</div>' if quotes else ""
+        unr_html = f'<div class="detail-block"><div class="detail-label">❓ Нерешённые вопросы</div><ul>{unr}</ul></div>' if unr else ""
+        raised = e(t.get("raised_by", ""))
+        title_val = e(t.get("title", ""))
+        desc_val = e(t.get("description", ""))
+
         th += f'''<div class="tc">
-<div class="th" onclick="tog(this)"><span class="tn">{i}</span><span class="tt">{e(t.get("title",""))}</span><span class="ar">▼</span></div>
+<div class="th" onclick="tog(this)"><span class="tn">{i}</span><span class="tt">{title_val}</span><span class="ar">▼</span></div>
 <div class="tb" style="display:none">
-<div class="desc">{e(t.get("description",""))}</div>
-{f'<div class="detail-block"><div class="detail-label">💬 Ход обсуждения</div><p>{detail}</p></div>' if detail else ""}
-{f'<div class="detail-block"><div class="detail-label">📌 Ключевые тезисы</div><ul>{kps}</ul></div>' if kps else ""}
-{f'<div class="detail-block"><div class="detail-label">👥 Позиции участников</div>{pos}</div>' if pos else ""}
-{f'<div class="detail-block"><div class="detail-label">🎯 Итог</div><p>{e(t.get("outcome",""))}</p></div>' if t.get("outcome") else ""}
-{f'<div class="detail-block"><div class="detail-label">💬 Цитаты</div>{quotes}</div>' if quotes else ""}
-{f'<div class="detail-block"><div class="detail-label">❓ Нерешённые вопросы</div><ul>{unr}</ul></div>' if unr else ""}
-<p class="raised"><small>Тему поднял(а): {e(t.get("raised_by",""))}</small></p>
+<div class="desc">{desc_val}</div>
+{detail_html}
+{kps_html}
+{pos_html}
+{outcome_html}
+{quotes_html}
+{unr_html}
+<p class="raised"><small>Тему поднял(а): {raised}</small></p>
 </div></div>'''
 
     # Decisions + Action Items
@@ -660,9 +672,9 @@ def generate_html(analysis, transcript_text=""):
         rh += f'<div class="rc rc-warn">⚠️ {e(ap)}</div>'
     for r in rc.get("recommendations", []):
         ic = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(r.get("priority", ""), "•")
-        rh += f'''<div class="rc rc-rec">{ic} <b>{e(r.get("what",""))}</b>
-{f'<p class="rc-why"><b>Почему:</b> {e(r["why"])}</p>' if r.get("why") else ""}
-{f'<p class="rc-how"><b>Как:</b> {e(r["how"])}</p>' if r.get("how") else ""}</div>'''
+        why_html = f'<p class="rc-why"><b>Почему:</b> {e(r["why"])}</p>' if r.get("why") else ""
+        how_html = f'<p class="rc-how"><b>Как:</b> {e(r["how"])}</p>' if r.get("how") else ""
+        rh += f'<div class="rc rc-rec">{ic} <b>{e(r.get("what",""))}</b>{why_html}{how_html}</div>'
     nmq = rc.get("next_meeting_questions", [])
     if nmq:
         rh += '<h3>❓ Вопросы для следующей встречи</h3>'
@@ -690,12 +702,29 @@ def generate_html(analysis, transcript_text=""):
             glh += f'<div class="gl-item"><div class="gl-term">{e(g.get("term",""))}</div><div class="gl-def">{e(g.get("definition",""))}</div></div>'
 
     # Transcript
-    trh = e(transcript_text).replace("\n", "<br>") if transcript_text else "<p>Транскрипция недоступна</p>"
+    if transcript_text:
+        escaped_tr = e(transcript_text)
+        trh = escaped_tr.replace("\n", "<br>")
+    else:
+        trh = "<p>Транскрипция недоступна</p>"
 
-    # Count tabs
-    tab_count = 7  # обзор, темы, решения, динамика, рекомендации, глоссарий, транскрипт
+    # Pre-build conditional sections (Python 3.11 compatibility - no nested f-strings)
+    dy_balance = f"<h3>Баланс участия</h3>{bh}" if bh else ""
+    dy_interact = f"<h3>Взаимодействие</h3>{iph}" if iph else ""
+    dy_emotional = f"<h3>Эмоциональная карта</h3>{emh}" if emh else ""
+
+    unc_section = ""
     if unc or ct:
-        tab_count += 1
+        unc_inner = f"<h3>Неоднозначные моменты</h3>{unch}" if unch else ""
+        ct_inner = f"<h3>Исправления распознавания</h3>{cth}" if cth else ""
+        unc_section = f'<div id="p-un" class="pn"><div class="s"><h2>⚠️ Требует уточнения</h2>{unc_inner}{ct_inner}</div></div>'
+
+    gl_section = ""
+    if gl:
+        gl_section = f'<div id="p-gl" class="pn"><div class="s"><h2>📖 Глоссарий</h2><p style="color:#888;margin-bottom:14px;font-size:13px">Ключевые термины из области обсуждения</p>{glh}</div></div>'
+
+    unc_tab = '<button class="nb" onclick="go(\'un\')">⚠️ Уточнения</button>' if unc or ct else ""
+    gl_tab = '<button class="nb" onclick="go(\'gl\')">📖 Глоссарий</button>' if gl else ""
 
     html = f'''<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Цифровой Умник – {e(analysis.get("meeting_topic_short","Отчёт"))}</title><style>
@@ -748,8 +777,8 @@ li.unr{{color:#d97706;font-weight:500}}
 <button class="nb" onclick="go('dc')">📌 Решения и задачи</button>
 <button class="nb" onclick="go('dy')">📊 Динамика</button>
 <button class="nb" onclick="go('rc')">💡 Рекомендации</button>
-{f'<button class="nb" onclick="go(\'un\')">⚠️ Уточнения</button>' if unc or ct else ""}
-{f'<button class="nb" onclick="go(\'gl\')">📖 Глоссарий</button>' if gl else ""}
+{unc_tab}
+{gl_tab}
 <button class="nb" onclick="go('tr')">📝 Транскрипт</button>
 </div>
 <div id="p-ov" class="pn a"><div class="s"><h2>📋 Обзор встречи</h2><div class="pg">
@@ -762,10 +791,10 @@ li.unr{{color:#d97706;font-weight:500}}
 </div><div class="sb">{e(p.get("summary",""))}</div></div></div>
 <div id="p-tp" class="pn"><div class="s"><h2>🎯 Темы обсуждения</h2>{th}</div></div>
 <div id="p-dc" class="pn"><div class="s"><h2>📌 Решения и задачи</h2>{dh}</div></div>
-<div id="p-dy" class="pn"><div class="s"><h2>📊 Динамика встречи</h2>{f"<h3>Баланс участия</h3>{bh}" if bh else ""}{f"<h3>Взаимодействие</h3>{iph}" if iph else ""}{f"<h3>Эмоциональная карта</h3>{emh}" if emh else ""}</div></div>
+<div id="p-dy" class="pn"><div class="s"><h2>📊 Динамика встречи</h2>{dy_balance}{dy_interact}{dy_emotional}</div></div>
 <div id="p-rc" class="pn"><div class="s"><h2>💡 Рекомендации Цифрового Умника</h2>{rh}</div></div>
-{f'<div id="p-un" class="pn"><div class="s"><h2>⚠️ Требует уточнения</h2>{f"<h3>Неоднозначные моменты</h3>{unch}" if unch else ""}{f"<h3>Исправления распознавания</h3>{cth}" if cth else ""}</div></div>' if unc or ct else ""}
-{f'<div id="p-gl" class="pn"><div class="s"><h2>📖 Глоссарий</h2><p style="color:#888;margin-bottom:14px;font-size:13px">Ключевые термины из области обсуждения</p>{glh}</div></div>' if gl else ""}
+{unc_section}
+{gl_section}
 <div id="p-tr" class="pn"><div class="s"><h2>📝 Транскрипция</h2><div class="tr-box">{trh}</div></div></div>
 <div class="ft">Цифровой Умник • {ds} • AI-анализ встречи</div></div>
 <script>
