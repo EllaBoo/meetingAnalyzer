@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# ffmpeg for audio/video processing, fonts for PDF
+# v2 ffmpeg + fonts
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     fonts-dejavu-core \
