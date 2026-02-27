@@ -1,11 +1,6 @@
 FROM python:3.11-slim
 
-# v2 ffmpeg + fonts
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
-    fonts-dejavu-core \
-    fonts-noto-cjk \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core && rm -rf /var/lib/apt/lists/* && fc-cache -f
 
 WORKDIR /app
 COPY requirements.txt .
