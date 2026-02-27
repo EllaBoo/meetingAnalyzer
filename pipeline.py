@@ -260,105 +260,240 @@ def generate_pdf(analysis):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import cm, mm
-    from reportlab.lib.colors import HexColor
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
-    from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
+    from reportlab.lib.colors import HexColor, Color
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+        HRFlowable, KeepTogether,
+    )
+    from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
 
     try:
         pdfmetrics.registerFont(TTFont("DV", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
         pdfmetrics.registerFont(TTFont("DVB", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"))
-        fn, fb = "DV", "DVB"
+        pdfmetrics.registerFont(TTFont("DVI", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf"))
+        fn, fb, fi = "DV", "DVB", "DVI"
     except Exception:
-        fn, fb = "Helvetica", "Helvetica-Bold"
+        fn, fb, fi = "Helvetica", "Helvetica-Bold", "Helvetica-Oblique"
+
+    # Colors
+    DARK = HexColor("#1a1a2e")
+    BLUE = HexColor("#16213e")
+    ACCENT = HexColor("#e94560")
+    LIGHT_BG = HexColor("#f8f9fa")
+    BORDER = HexColor("#dee2e6")
+    GRAY = HexColor("#6c757d")
+    GREEN = HexColor("#28a745")
+    ORANGE = HexColor("#fd7e14")
 
     slug = make_slug(analysis)
     ds = datetime.now().strftime("%Y-%m-%d")
     fname = f"{slug}_{ds}_report.pdf"
     fpath = os.path.join(TMP, fname)
-    doc = SimpleDocTemplate(fpath, pagesize=A4, leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
-    S = getSampleStyleSheet()
+    doc = SimpleDocTemplate(
+        fpath, pagesize=A4,
+        leftMargin=1.8*cm, rightMargin=1.8*cm,
+        topMargin=1.5*cm, bottomMargin=1.5*cm,
+    )
     e = esc
+    W = A4[0] - 3.6*cm  # usable width
 
-    title_s = ParagraphStyle("T", parent=S["Title"], fontName=fb, fontSize=18, textColor=HexColor("#1a1a2e"), spaceAfter=5*mm)
-    h1 = ParagraphStyle("H1", parent=S["Heading1"], fontName=fb, fontSize=13, textColor=HexColor("#16213e"), spaceBefore=6*mm, spaceAfter=3*mm)
-    h2 = ParagraphStyle("H2", parent=S["Heading2"], fontName=fb, fontSize=11, textColor=HexColor("#0f3460"), spaceBefore=4*mm, spaceAfter=2*mm)
-    bs = ParagraphStyle("B", parent=S["Normal"], fontName=fn, fontSize=9, leading=13, alignment=TA_JUSTIFY, spaceAfter=2*mm)
-    lb = ParagraphStyle("L", parent=bs, fontName=fb, textColor=HexColor("#e94560"))
-    ft = ParagraphStyle("F", parent=bs, fontSize=7, textColor=HexColor("#999"), alignment=TA_CENTER)
+    # Styles
+    S = getSampleStyleSheet()
+    title_s = ParagraphStyle("T", fontName=fb, fontSize=20, textColor=DARK, spaceAfter=2*mm, leading=24)
+    subtitle_s = ParagraphStyle("Sub", fontName=fn, fontSize=10, textColor=GRAY, spaceAfter=4*mm)
+    h1 = ParagraphStyle("H1", fontName=fb, fontSize=12, textColor=ACCENT, spaceBefore=5*mm, spaceAfter=2*mm, leading=15)
+    h2 = ParagraphStyle("H2", fontName=fb, fontSize=10, textColor=BLUE, spaceBefore=3*mm, spaceAfter=1.5*mm, leading=13)
+    body = ParagraphStyle("B", fontName=fn, fontSize=9, leading=13, alignment=TA_JUSTIFY, spaceAfter=1.5*mm)
+    body_bold = ParagraphStyle("BB", fontName=fb, fontSize=9, leading=13, spaceAfter=1*mm)
+    body_italic = ParagraphStyle("BI", fontName=fi, fontSize=8.5, leading=12, textColor=GRAY, spaceAfter=1*mm)
+    bullet = ParagraphStyle("Bul", fontName=fn, fontSize=9, leading=13, leftIndent=8*mm, spaceAfter=1*mm)
+    footer_s = ParagraphStyle("F", fontName=fn, fontSize=7, textColor=GRAY, alignment=TA_CENTER)
+
+    def hr():
+        return HRFlowable(width="100%", thickness=0.5, color=BORDER, spaceBefore=2*mm, spaceAfter=2*mm)
+
+    def section_header(num, title):
+        return Paragraph(f"<b>{num}.</b> {e(title)}", h1)
 
     st = []
     p = analysis.get("passport", {})
-    st.append(Spacer(1, 2*cm))
-    st.append(Paragraph("Цифровой Умник", title_s))
-    st.append(Paragraph(f"<b>{e(p.get('summary',''))}</b>", bs))
-    st.append(Spacer(1, 5*mm))
 
-    rows = [[e(k), e(str(v))] for k, v in [
-        ("Дата", p.get("date", "")), ("Длительность", p.get("duration_estimate", "")),
-        ("Участники", p.get("participants_count", "")), ("Формат", p.get("format", "")),
-        ("Область", p.get("domain", "")), ("Тон", p.get("tone", "")),
-    ]]
-    t = Table(rows, colWidths=[3.5*cm, 12.5*cm])
-    t.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (0, -1), fb), ("FONTNAME", (1, 0), (1, -1), fn),
-        ("FONTSIZE", (0, 0), (-1, -1), 9), ("TEXTCOLOR", (0, 0), (0, -1), HexColor("#e94560")),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3*mm),
+    # === HEADER ===
+    st.append(Paragraph("🧠 Цифровой Умник", title_s))
+    st.append(Paragraph(f"Отчёт от {ds}", subtitle_s))
+    st.append(hr())
+
+    # === SUMMARY ===
+    summary = p.get("summary", "")
+    if summary:
+        st.append(Paragraph(f"<b>{e(summary)}</b>", ParagraphStyle("Sum", fontName=fb, fontSize=10, leading=14, textColor=DARK, spaceAfter=3*mm)))
+
+    # === PASSPORT TABLE ===
+    passport_data = [
+        ["Дата", p.get("date", "—"), "Длительность", p.get("duration_estimate", "—")],
+        ["Участники", str(p.get("participants_count", "—")), "Формат", p.get("format", "—")],
+        ["Область", p.get("domain", "—"), "Тон", p.get("tone", "—")],
+    ]
+    pt = Table(passport_data, colWidths=[W*0.15, W*0.35, W*0.15, W*0.35])
+    pt.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (0, -1), fb), ("FONTNAME", (2, 0), (2, -1), fb),
+        ("FONTNAME", (1, 0), (1, -1), fn), ("FONTNAME", (3, 0), (3, -1), fn),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("TEXTCOLOR", (0, 0), (0, -1), ACCENT), ("TEXTCOLOR", (2, 0), (2, -1), ACCENT),
+        ("BACKGROUND", (0, 0), (-1, -1), LIGHT_BG),
+        ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+        ("TOPPADDING", (0, 0), (-1, -1), 2*mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2*mm),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2*mm),
     ]))
-    st.append(t)
-    st.append(PageBreak())
+    st.append(pt)
+    st.append(Spacer(1, 3*mm))
 
-    st.append(Paragraph("Темы", h1))
-    for i, tp in enumerate(analysis.get("topics", []), 1):
-        st.append(Paragraph(f"{i}. {e(tp.get('title', ''))}", h2))
-        st.append(Paragraph(e(tp.get("description", "")), bs))
-        for kp in tp.get("key_points", []):
-            st.append(Paragraph(f"  – {e(kp)}", bs))
-        for sp, pos in tp.get("positions", {}).items():
-            st.append(Paragraph(f"<b>{e(sp)}:</b> {e(pos)}", bs))
-        if tp.get("outcome"):
-            st.append(Paragraph(f"<b>Итог:</b> {e(tp['outcome'])}", bs))
-        for q in tp.get("quotes", [])[:3]:
-            st.append(Paragraph(f"<i>«{e(q)}»</i>", bs))
-        st.append(Spacer(1, 3*mm))
+    # === TOPICS ===
+    topics = analysis.get("topics", [])
+    if topics:
+        st.append(section_header(1, "ТЕМЫ ОБСУЖДЕНИЯ"))
+        for i, tp in enumerate(topics, 1):
+            topic_items = []
+            topic_items.append(Paragraph(f"<b>{i}. {e(tp.get('title', ''))}</b>", h2))
+            if tp.get("description"):
+                topic_items.append(Paragraph(e(tp["description"]), body))
+            for kp in tp.get("key_points", []):
+                topic_items.append(Paragraph(f"• {e(kp)}", bullet))
+            for sp, pos in tp.get("positions", {}).items():
+                topic_items.append(Paragraph(f"<b>{e(sp)}:</b> {e(pos)}", bullet))
+            if tp.get("outcome"):
+                topic_items.append(Paragraph(f"<b>Итог:</b> {e(tp['outcome'])}", body))
+            for q in tp.get("quotes", [])[:2]:
+                topic_items.append(Paragraph(f"«{e(q)}»", body_italic))
+            if tp.get("unresolved"):
+                for uq in tp["unresolved"]:
+                    topic_items.append(Paragraph(f"❓ {e(uq)}", bullet))
+            st.append(KeepTogether(topic_items))
+            st.append(Spacer(1, 2*mm))
 
+    # === DECISIONS ===
     decs = analysis.get("decisions", [])
     if decs:
-        st.append(Paragraph("Решения", h1))
+        st.append(section_header(2, "РЕШЕНИЯ"))
+        dec_rows = [["", "Решение", "Ответственный", "Статус"]]
         for d in decs:
-            ic = {"accepted": "[OK]", "pending": "[..]", "question": "[??]"}.get(d.get("status", ""), "[-]")
-            st.append(Paragraph(f"{ic} <b>{e(d.get('decision', ''))}</b>", bs))
+            status = d.get("status", "")
+            icon = {"accepted": "✅", "pending": "⏳", "question": "❓"}.get(status, "—")
+            dec_rows.append([
+                icon,
+                e(d.get("decision", "")),
+                e(d.get("responsible", "—")),
+                e(status),
+            ])
+        dt = Table(dec_rows, colWidths=[W*0.06, W*0.54, W*0.22, W*0.18])
+        dt.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, 0), fb), ("FONTNAME", (0, 1), (-1, -1), fn),
+            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("BACKGROUND", (0, 0), (-1, 0), BLUE), ("TEXTCOLOR", (0, 0), (-1, 0), HexColor("#ffffff")),
+            ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+            ("TOPPADDING", (0, 0), (-1, -1), 1.5*mm),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5*mm),
+            ("LEFTPADDING", (0, 0), (-1, -1), 1.5*mm),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        st.append(dt)
+        st.append(Spacer(1, 2*mm))
 
+    # === UNRESOLVED QUESTIONS ===
+    uqs = analysis.get("unresolved_questions", [])
+    if uqs:
+        st.append(section_header(3, "ОТКРЫТЫЕ ВОПРОСЫ"))
+        for uq in uqs:
+            st.append(Paragraph(f"❓ <b>{e(uq.get('question', ''))}</b>", body_bold))
+            if uq.get("reason"):
+                st.append(Paragraph(f"Причина: {e(uq['reason'])}", bullet))
+        st.append(Spacer(1, 2*mm))
+
+    # === DYNAMICS ===
     dy = analysis.get("dynamics", {})
     if dy:
-        st.append(PageBreak())
-        st.append(Paragraph("Динамика", h1))
-        for sp, pc in dy.get("participation_balance", {}).items():
-            st.append(Paragraph(f"{e(sp)}: {e(pc)}", bs))
-        em = dy.get("emotional_map", {})
-        for k, label in [("enthusiasm_moments", "Энтузиазм"), ("tension_moments", "Напряжение"), ("turning_points", "Переломы")]:
-            items = em.get(k, [])
-            if items:
-                st.append(Paragraph(f"<b>{label}:</b>", lb))
-                for it in items:
-                    st.append(Paragraph(f"  – {e(it)}", bs))
+        st.append(section_header(4, "ДИНАМИКА ВСТРЕЧИ"))
+        # Participation balance
+        balance = dy.get("participation_balance", {})
+        if balance:
+            st.append(Paragraph("<b>Баланс участия:</b>", body_bold))
+            bal_items = [f"{e(sp)}: {e(pc)}" for sp, pc in balance.items()]
+            st.append(Paragraph(" | ".join(bal_items), body))
 
+        # Interaction patterns
+        ip = dy.get("interaction_patterns", {})
+        if ip.get("interruptions"):
+            st.append(Paragraph(f"<b>Перебивания:</b> {e(ip['interruptions'])}", body))
+
+        # Emotional map
+        em = dy.get("emotional_map", {})
+        for key, label, icon in [
+            ("enthusiasm_moments", "Энтузиазм", "🔥"),
+            ("tension_moments", "Напряжение", "⚡"),
+            ("turning_points", "Переломные моменты", "🔄"),
+        ]:
+            items = em.get(key, [])
+            if items:
+                st.append(Paragraph(f"<b>{icon} {label}:</b>", body_bold))
+                for it in items:
+                    st.append(Paragraph(f"• {e(it)}", bullet))
+
+        # Unspoken
+        unspoken = dy.get("unspoken", [])
+        if unspoken:
+            st.append(Paragraph("<b>🤫 Между строк:</b>", body_bold))
+            for u in unspoken:
+                st.append(Paragraph(f"• {e(u)}", bullet))
+        st.append(Spacer(1, 2*mm))
+
+    # === RECOMMENDATIONS ===
     rc = analysis.get("expert_recommendations", {})
     if rc:
-        st.append(PageBreak())
-        st.append(Paragraph("Рекомендации", h1))
-        for s2 in rc.get("strengths", []):
-            st.append(Paragraph(f"+ {e(s2)}", bs))
-        for r in rc.get("recommendations", []):
-            st.append(Paragraph(f"<b>{e(r.get('what', ''))}</b>", bs))
-            if r.get("why"):
-                st.append(Paragraph(f"  Почему: {e(r['why'])}", bs))
-            if r.get("how"):
-                st.append(Paragraph(f"  Как: {e(r['how'])}", bs))
+        st.append(hr())
+        st.append(Paragraph("<b>🧠 РЕКОМЕНДАЦИИ ЦИФРОВОГО УМНИКА</b>", ParagraphStyle(
+            "RecH", fontName=fb, fontSize=12, textColor=DARK, spaceBefore=2*mm, spaceAfter=3*mm,
+        )))
 
-    st.append(Spacer(1, 1*cm))
-    st.append(Paragraph(f"Цифровой Умник • {ds}", ft))
+        # Strengths
+        for s2 in rc.get("strengths", []):
+            st.append(Paragraph(f"✅ {e(s2)}", body))
+
+        # Attention points
+        for ap in rc.get("attention_points", []):
+            st.append(Paragraph(f"⚠️ {e(ap)}", body))
+
+        # Recommendations
+        recs = rc.get("recommendations", [])
+        if recs:
+            st.append(Spacer(1, 2*mm))
+            for idx, r in enumerate(recs, 1):
+                priority = r.get("priority", "medium")
+                p_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(priority, "⚪")
+                rec_items = []
+                rec_items.append(Paragraph(f"{p_icon} <b>Рекомендация {idx}: {e(r.get('what', ''))}</b>", body_bold))
+                if r.get("why"):
+                    rec_items.append(Paragraph(f"Почему: {e(r['why'])}", bullet))
+                if r.get("how"):
+                    rec_items.append(Paragraph(f"Как: {e(r['how'])}", bullet))
+                st.append(KeepTogether(rec_items))
+                st.append(Spacer(1, 1.5*mm))
+
+        # Next meeting questions
+        nmq = rc.get("next_meeting_questions", [])
+        if nmq:
+            st.append(Spacer(1, 2*mm))
+            st.append(Paragraph("<b>Вопросы для следующей встречи:</b>", body_bold))
+            for q in nmq:
+                st.append(Paragraph(f"→ {e(q)}", bullet))
+
+    # === FOOTER ===
+    st.append(Spacer(1, 5*mm))
+    st.append(hr())
+    st.append(Paragraph(f"Цифровой Умник • {ds} • AI-анализ встречи", footer_s))
+
     doc.build(st)
     log.info(f"PDF: {fname}")
     return fpath, fname

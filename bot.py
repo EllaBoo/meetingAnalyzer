@@ -235,6 +235,25 @@ async def handle_analyze(client, message: Message):
     )
 
 
+@app.on_callback_query(filters.regex(r"^start_analyze$"))
+async def handle_start_analyze(client, callback: CallbackQuery):
+    s = get_session(callback.message.chat.id)
+    if s["processing"]:
+        await callback.answer("Уже обрабатываю!")
+        return
+    if not s["files"] and not s["urls"]:
+        await callback.answer("Сначала скинь файл!")
+        return
+    buttons = []
+    for code, (name, _) in LANGUAGES.items():
+        buttons.append([InlineKeyboardButton(name, callback_data=f"lang_{code}")])
+    await callback.message.edit_text(
+        "🌍 На каком языке написать отчёт?",
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
+    await callback.answer()
+
+
 @app.on_callback_query(filters.regex(r"^lang_"))
 async def handle_language(client, callback: CallbackQuery):
     s = get_session(callback.message.chat.id)
@@ -259,7 +278,8 @@ async def handle_audio(client, message: Message):
         fn = f"voice_{uuid.uuid4().hex[:6]}.ogg"
     # Store the message itself for Pyrogram download
     s["files"].append({"msg": message, "name": fn})
-    await message.reply(f"📎 Принято: **{fn}**\nЕщё? Или /analyze")
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Анализировать", callback_data="start_analyze")]])
+    await message.reply(f"📎 Принято: **{fn}**\nЕщё файлы? Или жми кнопку:", reply_markup=kb)
 
 
 @app.on_message(filters.video | filters.video_note)
@@ -272,7 +292,8 @@ async def handle_video(client, message: Message):
     else:
         fn = f"videonote_{uuid.uuid4().hex[:6]}.mp4"
     s["files"].append({"msg": message, "name": fn})
-    await message.reply(f"📎 Принято: **{fn}**\nЕщё? Или /analyze")
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Анализировать", callback_data="start_analyze")]])
+    await message.reply(f"📎 Принято: **{fn}**\nЕщё файлы? Или жми кнопку:", reply_markup=kb)
 
 
 @app.on_message(filters.document)
@@ -284,7 +305,8 @@ async def handle_document(client, message: Message):
     ext = os.path.splitext(fn)[1].lower()
     if ext in MEDIA_EXTS:
         s["files"].append({"msg": message, "name": fn})
-        await message.reply(f"📎 Принято: **{fn}**\nЕщё? Или /analyze")
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Анализировать", callback_data="start_analyze")]])
+        await message.reply(f"📎 Принято: **{fn}**\nЕщё файлы? Или жми кнопку:", reply_markup=kb)
     else:
         await message.reply(
             f"🤔 **{fn}** – не аудио/видео.\nПоддерживаю: mp3, wav, m4a, mp4, mov..."
@@ -308,12 +330,14 @@ async def handle_text(client, message: Message):
         match = re.search(pattern, text)
         if match:
             s["urls"].append(match.group(0))
-            await message.reply("🔗 Ссылка принята!\nЕщё? Или /analyze")
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Анализировать", callback_data="start_analyze")]])
+            await message.reply("🔗 Ссылка принята!\nЕщё? Или жми кнопку:", reply_markup=kb)
             return
 
     if re.match(r"https?://\S+", text):
         s["urls"].append(text)
-        await message.reply("🔗 Ссылка принята!\nЕщё? Или /analyze")
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Анализировать", callback_data="start_analyze")]])
+        await message.reply("🔗 Ссылка принята!\nЕщё? Или жми кнопку:", reply_markup=kb)
         return
 
     await message.reply(
